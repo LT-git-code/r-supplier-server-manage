@@ -205,7 +205,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
           userId: editingUser.id,
           fullName: editUserName,
           roles: editUserRoles,
-          departmentId: editUserDepartment || null,
+          departmentId: editUserDepartment === 'none' ? null : editUserDepartment,
         },
       });
 
@@ -285,7 +285,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
     setEditingUser(user);
     setEditUserName(user.profile?.full_name || '');
     setEditUserRoles([...user.roles]);
-    setEditUserDepartment(user.departments[0]?.id || '');
+    setEditUserDepartment(user.departments[0]?.id || 'none');
     setEditDialogOpen(true);
   };
 
@@ -665,7 +665,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
                     <SelectValue placeholder="选择部门" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">无部门</SelectItem>
+                    <SelectItem value="none">无部门</SelectItem>
                     {departments.map(dept => (
                       <SelectItem key={dept.id} value={dept.id}>
                         {dept.name}
