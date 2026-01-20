@@ -205,7 +205,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
           userId: editingUser.id,
           fullName: editUserName,
           roles: editUserRoles,
-          departmentId: editUserDepartment === '_none' ? null : (editUserDepartment || null),
+          departmentId: editUserDepartment || null,
         },
       });
 
@@ -660,12 +660,12 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
             {editUserRoles.includes('department') && (
               <div className="space-y-2">
                 <Label>所属部门</Label>
-                <Select value={editUserDepartment || '_none'} onValueChange={setEditUserDepartment}>
+                <Select value={editUserDepartment} onValueChange={setEditUserDepartment}>
                   <SelectTrigger>
                     <SelectValue placeholder="选择部门" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">无部门</SelectItem>
+                    <SelectItem value="">无部门</SelectItem>
                     {departments.map(dept => (
                       <SelectItem key={dept.id} value={dept.id}>
                         {dept.name}
