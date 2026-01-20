@@ -76,13 +76,13 @@ interface Department {
   description: string | null;
 }
 
-const roleLabels: Record<string, string> = {
+const terminalLabels: Record<string, string> = {
   supplier: '供应商',
-  department: '部门人员',
+  department: '部门',
   admin: '管理员',
 };
 
-const roleColors: Record<string, string> = {
+const terminalColors: Record<string, string> = {
   supplier: 'bg-info/10 text-info border-info/30',
   department: 'bg-warning/10 text-warning border-warning/30',
   admin: 'bg-destructive/10 text-destructive border-destructive/30',
@@ -203,7 +203,7 @@ export default function AdminUsers() {
 
       if (error) throw error;
 
-      toast({ title: '角色更新成功' });
+      toast({ title: '终端更新成功' });
       setEditRolesDialogOpen(false);
       fetchData();
     } catch (error: any) {
@@ -401,17 +401,17 @@ export default function AdminUsers() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>角色</Label>
+                  <Label>终端</Label>
                   <div className="flex flex-wrap gap-4">
-                    {['supplier', 'department', 'admin'].map(role => (
-                      <div key={role} className="flex items-center space-x-2">
+                    {['supplier', 'department', 'admin'].map(terminal => (
+                      <div key={terminal} className="flex items-center space-x-2">
                         <Checkbox
-                          id={`new-role-${role}`}
-                          checked={newUserRoles.includes(role)}
-                          onCheckedChange={(checked) => toggleNewUserRole(role, !!checked)}
+                          id={`new-terminal-${terminal}`}
+                          checked={newUserRoles.includes(terminal)}
+                          onCheckedChange={(checked) => toggleNewUserRole(terminal, !!checked)}
                         />
-                        <label htmlFor={`new-role-${role}`} className="text-sm">
-                          {roleLabels[role]}
+                        <label htmlFor={`new-terminal-${terminal}`} className="text-sm">
+                          {terminalLabels[terminal]}
                         </label>
                       </div>
                     ))}
@@ -504,12 +504,12 @@ export default function AdminUsers() {
             </div>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
               <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="筛选角色" />
+                <SelectValue placeholder="筛选终端" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">全部角色</SelectItem>
+                <SelectItem value="all">全部终端</SelectItem>
                 <SelectItem value="admin">管理员</SelectItem>
-                <SelectItem value="department">部门人员</SelectItem>
+                <SelectItem value="department">部门</SelectItem>
                 <SelectItem value="supplier">供应商</SelectItem>
               </SelectContent>
             </Select>
@@ -524,7 +524,7 @@ export default function AdminUsers() {
               <TableHeader>
                 <TableRow>
                   <TableHead>用户</TableHead>
-                  <TableHead>角色</TableHead>
+                  <TableHead>终端</TableHead>
                   <TableHead>部门</TableHead>
                   <TableHead>注册时间</TableHead>
                   <TableHead>最后登录</TableHead>
@@ -550,11 +550,11 @@ export default function AdminUsers() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {user.roles.length === 0 ? (
-                            <Badge variant="outline" className="text-muted-foreground">无角色</Badge>
+                            <Badge variant="outline" className="text-muted-foreground">无终端</Badge>
                           ) : (
-                            user.roles.map(role => (
-                              <Badge key={role} variant="outline" className={roleColors[role]}>
-                                {roleLabels[role]}
+                            user.roles.map(terminal => (
+                              <Badge key={terminal} variant="outline" className={terminalColors[terminal]}>
+                                {terminalLabels[terminal]}
                               </Badge>
                             ))
                           )}
@@ -588,7 +588,7 @@ export default function AdminUsers() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => openEditRoles(user)}>
                               <Shield className="h-4 w-4 mr-2" />
-                              编辑角色
+                              编辑终端
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
@@ -611,29 +611,29 @@ export default function AdminUsers() {
         </CardContent>
       </Card>
 
-      {/* 编辑角色弹窗 */}
+      {/* 编辑终端弹窗 */}
       <Dialog open={editRolesDialogOpen} onOpenChange={setEditRolesDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>编辑用户角色</DialogTitle>
+            <DialogTitle>编辑用户终端</DialogTitle>
             <DialogDescription>
               {editingUser?.email}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {['supplier', 'department', 'admin'].map(role => (
-              <div key={role} className="flex items-center space-x-3">
+            {['supplier', 'department', 'admin'].map(terminal => (
+              <div key={terminal} className="flex items-center space-x-3">
                 <Checkbox
-                  id={`edit-role-${role}`}
-                  checked={editRoles.includes(role)}
-                  onCheckedChange={(checked) => toggleRole(role, !!checked)}
+                  id={`edit-terminal-${terminal}`}
+                  checked={editRoles.includes(terminal)}
+                  onCheckedChange={(checked) => toggleRole(terminal, !!checked)}
                 />
-                <label htmlFor={`edit-role-${role}`} className="flex-1">
-                  <div className="font-medium">{roleLabels[role]}</div>
+                <label htmlFor={`edit-terminal-${terminal}`} className="flex-1">
+                  <div className="font-medium">{terminalLabels[terminal]}</div>
                   <div className="text-sm text-muted-foreground">
-                    {role === 'supplier' && '可以管理自己的供应商信息、产品和资质'}
-                    {role === 'department' && '可以查看和管理本部门的供应商库'}
-                    {role === 'admin' && '拥有系统的完整管理权限'}
+                    {terminal === 'supplier' && '可以管理自己的供应商信息、产品和资质'}
+                    {terminal === 'department' && '可以查看和管理本部门的供应商库'}
+                    {terminal === 'admin' && '拥有系统的完整管理权限'}
                   </div>
                 </label>
               </div>

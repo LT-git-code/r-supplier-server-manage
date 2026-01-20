@@ -26,7 +26,7 @@ export function AppLayout() {
     return <Navigate to="/auth" replace />;
   }
 
-  // 如果用户没有任何角色，显示等待审核提示
+  // 如果用户没有任何终端角色，显示等待审核提示
   if (!authUser?.roles.length) {
     const handleBackToLogin = async () => {
       await signOut();
@@ -38,9 +38,9 @@ export function AppLayout() {
           <div className="w-16 h-16 rounded-full bg-warning/10 flex items-center justify-center mx-auto mb-4">
             <Loader2 className="h-8 w-8 text-warning animate-spin" />
           </div>
-          <h2 className="text-xl font-semibold mb-2">账户审核中</h2>
+          <h2 className="text-xl font-semibold mb-2">终端审核中</h2>
           <p className="text-muted-foreground mb-6">
-            您的账户正在等待管理员审核，审核通过后即可使用系统。
+            您的账户尚未分配终端权限，请等待管理员审核。
           </p>
           <div className="flex flex-col gap-3">
             <button
