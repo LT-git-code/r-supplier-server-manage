@@ -490,6 +490,45 @@ serve(async (req) => {
         );
       }
 
+      case 'get_announcements': {
+        const { limit = 5 } = params;
+        const { data, error } = await supabaseAdmin
+          .from('announcements')
+          .select('id, title, content, published_at, created_at')
+          .eq('is_published', true)
+          .order('published_at', { ascending: false })
+          .limit(limit);
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify(data),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_recent_audits': {
+        const { limit = 5 } = params;
+        const { data, error } = await supabaseAdmin
+          .from('audit_records')
+          .select(`
+            id,
+            audit_type,
+            target_table,
+            status,
+            review_comment,
+            created_at,
+            reviewed_at
+          `)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify(data),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: '未知操作' }),
