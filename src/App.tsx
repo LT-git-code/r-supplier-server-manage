@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import SetupAdmin from "./pages/SetupAdmin";
+import AdminUsers from "./pages/admin/AdminUsers";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,7 +44,7 @@ const App = () => (
               
               {/* 管理员路由 */}
               <Route path="/admin/dashboard" element={<div className="p-4">数据看板（开发中）</div>} />
-              <Route path="/admin/users" element={<div className="p-4">用户管理（开发中）</div>} />
+              <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/audit" element={<div className="p-4">供应商审核（开发中）</div>} />
               <Route path="/admin/suppliers" element={<div className="p-4">供应商管理（开发中）</div>} />
               <Route path="/admin/products" element={<div className="p-4">产品管理（开发中）</div>} />
