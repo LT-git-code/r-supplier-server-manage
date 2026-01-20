@@ -38,7 +38,7 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 验证用户是管理员或部门用户
+    // 验证用户角色
     const { data: userRoles } = await supabaseAdmin
       .from('user_roles')
       .select('role')
@@ -48,15 +48,16 @@ serve(async (req) => {
     const isAdmin = roles.includes('admin');
     const isDept = roles.includes('department');
 
-    if (!isAdmin && !isDept) {
+    const { action, ...params } = await req.json();
+    console.log('Roles API action:', action, params);
+
+    // get_user_menus 不需要角色验证，允许所有已认证用户调用
+    if (action !== 'get_user_menus' && !isAdmin && !isDept) {
       return new Response(
         JSON.stringify({ error: '无权限执行此操作' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    const { action, ...params } = await req.json();
-    console.log('Roles API action:', action, params);
 
     switch (action) {
       case 'get_roles_data': {
