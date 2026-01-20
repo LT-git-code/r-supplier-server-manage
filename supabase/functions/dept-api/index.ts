@@ -53,34 +53,17 @@ serve(async (req) => {
       );
     }
 
-    // 获取用户所属部门
-    const { data: userDepts } = await supabaseAdmin
-      .from('user_departments')
-      .select('department_id')
-      .eq('user_id', user.id);
-
-    const deptIds = userDepts?.map(d => d.department_id) || [];
-    
-    if (deptIds.length === 0) {
-      return new Response(
-        JSON.stringify({ error: '用户未分配部门' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const { action, ...params } = await req.json();
     console.log('Dept API action:', action, params);
 
     switch (action) {
       case 'get_dept_suppliers': {
+        // 获取所有已批准的供应商（取消部门限制）
         const { data: suppliers, error } = await supabaseAdmin
-          .from('department_suppliers')
-          .select(`
-            *,
-            supplier:suppliers(id, company_name, supplier_type, contact_name, contact_phone, status, main_products)
-          `)
-          .in('department_id', deptIds)
-          .order('created_at', { ascending: false });
+          .from('suppliers')
+          .select('id, company_name, supplier_type, contact_name, contact_phone, status, main_products')
+          .eq('status', 'approved')
+          .order('company_name');
 
         if (error) throw error;
 
@@ -105,99 +88,15 @@ serve(async (req) => {
         );
       }
 
-      case 'add_supplier': {
-        const { supplierId } = params;
-        
-        // 检查是否已存在
-        const { data: existing } = await supabaseAdmin
-          .from('department_suppliers')
-          .select('id')
-          .eq('department_id', deptIds[0])
-          .eq('supplier_id', supplierId)
-          .maybeSingle();
-
-        if (existing) {
-          return new Response(
-            JSON.stringify({ error: '该供应商已在本部门' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        const { error } = await supabaseAdmin
-          .from('department_suppliers')
-          .insert({
-            department_id: deptIds[0],
-            supplier_id: supplierId,
-            added_by: user.id,
-            library_type: 'current',
-          });
-
-        if (error) throw error;
-
-        return new Response(
-          JSON.stringify({ success: true }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      case 'enable_supplier': {
-        const { deptSupplierId } = params;
-        
-        const { error } = await supabaseAdmin
-          .from('department_suppliers')
-          .update({ library_type: 'current' })
-          .eq('id', deptSupplierId)
-          .in('department_id', deptIds);
-
-        if (error) throw error;
-
-        return new Response(
-          JSON.stringify({ success: true }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      case 'disable_supplier': {
-        const { deptSupplierId } = params;
-        
-        const { error } = await supabaseAdmin
-          .from('department_suppliers')
-          .update({ library_type: 'disabled' })
-          .eq('id', deptSupplierId)
-          .in('department_id', deptIds);
-
-        if (error) throw error;
-
-        return new Response(
-          JSON.stringify({ success: true }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
       case 'get_dept_products': {
-        // 获取本部门启用的供应商ID列表
-        const { data: deptSuppliers } = await supabaseAdmin
-          .from('department_suppliers')
-          .select('supplier_id')
-          .in('department_id', deptIds)
-          .eq('library_type', 'current');
-
-        const supplierIds = deptSuppliers?.map(s => s.supplier_id) || [];
-        
-        if (supplierIds.length === 0) {
-          return new Response(
-            JSON.stringify({ products: [] }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
+        // 获取所有已批准供应商的产品（取消部门限制）
         const { data: products, error } = await supabaseAdmin
           .from('products')
           .select(`
             *,
-            supplier:suppliers(id, company_name, supplier_type, contact_name, contact_phone, contact_email, address, main_products)
+            supplier:suppliers!inner(id, company_name, supplier_type, contact_name, contact_phone, contact_email, address, main_products, status)
           `)
-          .in('supplier_id', supplierIds)
+          .eq('suppliers.status', 'approved')
           .eq('is_active', true)
           .order('name');
 
