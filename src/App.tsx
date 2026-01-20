@@ -12,6 +12,7 @@ import SetupAdmin from "./pages/SetupAdmin";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminAudit from "./pages/admin/AdminAudit";
+import SupplierRegister from "./pages/supplier/Register";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup-admin" element={<SetupAdmin />} />
+            <Route path="/supplier/register" element={<SupplierRegister />} />
             
             {/* 需要认证的路由 */}
             <Route element={<AppLayout />}>
