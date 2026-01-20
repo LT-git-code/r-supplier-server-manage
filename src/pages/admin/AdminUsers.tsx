@@ -116,6 +116,12 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
   const [editRoles, setEditRoles] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // 编辑部门弹窗
+  const [editDeptDialogOpen, setEditDeptDialogOpen] = useState(false);
+  const [editingDeptUser, setEditingDeptUser] = useState<UserData | null>(null);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [savingDept, setSavingDept] = useState(false);
+
   // 创建部门弹窗
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
@@ -296,6 +302,41 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
       setNewUserRoles([...newUserRoles, role]);
     } else {
       setNewUserRoles(newUserRoles.filter(r => r !== role));
+    }
+  };
+
+  const openEditDepartment = (user: UserData) => {
+    setEditingDeptUser(user);
+    setSelectedDepartment(user.departments[0]?.id || '');
+    setEditDeptDialogOpen(true);
+  };
+
+  const handleUpdateDepartment = async () => {
+    if (!editingDeptUser) return;
+
+    try {
+      setSavingDept(true);
+      const { error } = await supabase.functions.invoke('admin-api', {
+        body: {
+          action: 'update_user_department',
+          userId: editingDeptUser.id,
+          departmentId: selectedDepartment || null,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({ title: '部门更新成功' });
+      setEditDeptDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '更新失败',
+        description: error.message,
+      });
+    } finally {
+      setSavingDept(false);
     }
   };
 
@@ -597,6 +638,10 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
                               <Shield className="h-4 w-4 mr-2" />
                               编辑终端
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditDepartment(user)}>
+                              <Building2 className="h-4 w-4 mr-2" />
+                              编辑部门
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
                               onClick={() => handleDeleteUser(user.id)}
@@ -650,6 +695,43 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
             <Button variant="outline" onClick={() => setEditRolesDialogOpen(false)}>取消</Button>
             <Button onClick={handleUpdateRoles} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑部门弹窗 */}
+      <Dialog open={editDeptDialogOpen} onOpenChange={setEditDeptDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>编辑用户部门</DialogTitle>
+            <DialogDescription>
+              {editingDeptUser?.email}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>所属部门</Label>
+              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择部门" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">无部门</SelectItem>
+                  {departments.map(dept => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDeptDialogOpen(false)}>取消</Button>
+            <Button onClick={handleUpdateDepartment} disabled={savingDept}>
+              {savingDept && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               保存
             </Button>
           </DialogFooter>
