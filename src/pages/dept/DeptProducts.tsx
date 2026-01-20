@@ -145,7 +145,7 @@ export default function DeptProducts() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">本部门启用供应商的产品</CardTitle>
+          <CardTitle className="text-lg">已批准供应商的产品</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4 mb-4">
