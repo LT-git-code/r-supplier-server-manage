@@ -29,13 +29,18 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } }
     });
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
+    // 使用 getClaims 验证 JWT token
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: authError } = await supabaseClient.auth.getClaims(token);
+    if (authError || !claimsData?.claims) {
+      console.error('认证失败:', authError);
       return new Response(
         JSON.stringify({ error: '认证失败' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    const user = { id: claimsData.claims.sub as string };
 
     // 使用服务角色检查是否为管理员
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
