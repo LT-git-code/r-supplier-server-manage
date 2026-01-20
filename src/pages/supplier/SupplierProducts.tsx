@@ -163,6 +163,28 @@ export default function SupplierProducts() {
     setShowDeleteDialog(true);
   };
 
+  const buildProductPayload = (p: Partial<Product>) => {
+    // 只提交数据库真实存在的字段，避免把关联对象/只读字段传给后端
+    const payload: Record<string, unknown> = {
+      name: p.name,
+      code: p.code || null,
+      category_id: p.category_id || null,
+      description: p.description || null,
+      specifications: p.specifications || null,
+      unit: p.unit || null,
+      price: typeof p.price === 'number' ? p.price : null,
+      min_order_quantity: typeof p.min_order_quantity === 'number' ? p.min_order_quantity : null,
+      lead_time_days: typeof p.lead_time_days === 'number' ? p.lead_time_days : null,
+    };
+
+    // 可选字段
+    if (p.images !== undefined) payload.images = p.images;
+    if (p.is_active !== undefined) payload.is_active = p.is_active;
+    if (p.status !== undefined) payload.status = p.status;
+
+    return payload;
+  };
+
   const handleSave = async () => {
     if (!editingProduct?.name) {
       toast({
@@ -174,11 +196,13 @@ export default function SupplierProducts() {
 
     try {
       setSaving(true);
+      const payload = buildProductPayload(editingProduct);
+
       if ('id' in editingProduct && editingProduct.id) {
-        await api.updateProduct(editingProduct.id, editingProduct);
+        await api.updateProduct(editingProduct.id, payload);
         toast({ title: '更新成功', description: '产品信息已更新' });
       } else {
-        await api.createProduct(editingProduct);
+        await api.createProduct(payload);
         toast({ title: '添加成功', description: '新产品已添加' });
       }
       setShowDialog(false);

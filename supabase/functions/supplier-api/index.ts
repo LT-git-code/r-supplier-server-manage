@@ -6,6 +6,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function pickProductPayload(product: Record<string, unknown> | null | undefined) {
+  const allowed = [
+    "category_id",
+    "name",
+    "code",
+    "description",
+    "specifications",
+    "unit",
+    "price",
+    "min_order_quantity",
+    "lead_time_days",
+    "images",
+    "is_active",
+    "status",
+  ] as const;
+
+  const out: Record<string, unknown> = {};
+  for (const key of allowed) {
+    const value = product?.[key];
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -239,9 +263,11 @@ serve(async (req) => {
 
       case "create_product": {
         const { product } = params;
+        const payload = pickProductPayload(product);
+
         const { data, error } = await supabase
           .from("products")
-          .insert({ ...product, supplier_id: supplierId })
+          .insert({ ...payload, supplier_id: supplierId })
           .select()
           .single();
 
@@ -253,9 +279,11 @@ serve(async (req) => {
 
       case "update_product": {
         const { id, product } = params;
+        const payload = pickProductPayload(product);
+
         const { error } = await supabase
           .from("products")
-          .update(product)
+          .update(payload)
           .eq("id", id)
           .eq("supplier_id", supplierId);
 
@@ -432,8 +460,22 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error("Error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: errorMessage }), {
+
+    let errorMessage = "Unknown error";
+    if (typeof error === "string") errorMessage = error;
+    else if (error && typeof error === "object" && "message" in error) {
+      errorMessage = String((error as { message: unknown }).message);
+    } else {
+      try {
+        errorMessage = JSON.stringify(error);
+      } catch {
+        // ignore
+      }
+    }
+
+    const errorCode = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : undefined;
+
+    return new Response(JSON.stringify({ error: errorMessage, code: errorCode }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
