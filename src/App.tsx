@@ -13,6 +13,9 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminAudit from "./pages/admin/AdminAudit";
 import AdminSuppliers from "./pages/admin/AdminSuppliers";
+import AdminProducts from "./pages/admin/AdminProducts";
+import AdminQualificationAudit from "./pages/admin/AdminQualificationAudit";
+import AdminSettings from "./pages/admin/AdminSettings";
 import SupplierRegister from "./pages/supplier/Register";
 import SupplierDashboard from "./pages/supplier/SupplierDashboard";
 import SupplierInfo from "./pages/supplier/SupplierInfo";
@@ -64,11 +67,12 @@ const App = () => (
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/audit" element={<AdminAudit />} />
               <Route path="/admin/suppliers" element={<AdminSuppliers />} />
-              <Route path="/admin/products" element={<div className="p-4">产品管理（开发中）</div>} />
+              <Route path="/admin/products" element={<AdminProducts />} />
+              <Route path="/admin/qualification-audit" element={<AdminQualificationAudit />} />
               <Route path="/admin/reports" element={<div className="p-4">报表管理（开发中）</div>} />
               <Route path="/admin/announcements" element={<div className="p-4">公告管理（开发中）</div>} />
               <Route path="/admin/roles" element={<DeptRoles />} />
-              <Route path="/admin/settings" element={<div className="p-4">系统设置（开发中）</div>} />
+              <Route path="/admin/settings" element={<AdminSettings />} />
               
               {/* 个人设置 */}
               <Route path="/profile" element={<div className="p-4">个人设置（开发中）</div>} />

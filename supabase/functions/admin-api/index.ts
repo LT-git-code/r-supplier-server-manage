@@ -242,13 +242,188 @@ serve(async (req) => {
         );
       }
 
+      case 'list_products': {
+        const { status } = params;
+        
+        // 获取审核通过供应商的产品
+        let query = supabaseAdmin
+          .from('products')
+          .select(`
+            *,
+            suppliers!inner (
+              id,
+              company_name,
+              contact_name,
+              supplier_type,
+              status
+            ),
+            product_categories (
+              id,
+              name
+            )
+          `)
+          .eq('suppliers.status', 'approved')
+          .order('created_at', { ascending: false });
+
+        if (status) {
+          query = query.eq('status', status);
+        }
+
+        const { data: products, error } = await query;
+        if (error) throw error;
+
+        // 格式化数据
+        const formattedProducts = products?.map(p => ({
+          ...p,
+          supplier: p.suppliers,
+          category: p.product_categories,
+          suppliers: undefined,
+          product_categories: undefined,
+        })) || [];
+
+        return new Response(
+          JSON.stringify({ products: formattedProducts }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'update_product_status': {
+        const { productId, status: newStatus } = params;
+        
+        const { error: updateError } = await supabaseAdmin
+          .from('products')
+          .update({ status: newStatus })
+          .eq('id', productId);
+
+        if (updateError) throw updateError;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'list_qualifications': {
+        const { status } = params;
+        
+        let query = supabaseAdmin
+          .from('qualifications')
+          .select(`
+            *,
+            suppliers (
+              id,
+              company_name,
+              contact_name,
+              supplier_type
+            ),
+            qualification_types (
+              id,
+              name,
+              code
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (status) {
+          query = query.eq('status', status);
+        }
+
+        const { data: qualifications, error } = await query;
+        if (error) throw error;
+
+        // 格式化数据
+        const formattedQualifications = qualifications?.map(q => ({
+          ...q,
+          supplier: q.suppliers,
+          qualification_type: q.qualification_types,
+          suppliers: undefined,
+          qualification_types: undefined,
+        })) || [];
+
+        return new Response(
+          JSON.stringify({ qualifications: formattedQualifications }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'approve_qualification': {
+        const { qualificationId } = params;
+        
+        const { error: updateError } = await supabaseAdmin
+          .from('qualifications')
+          .update({
+            status: 'approved',
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: user.id,
+            rejection_reason: null,
+          })
+          .eq('id', qualificationId);
+
+        if (updateError) throw updateError;
+
+        // 记录审核日志
+        await supabaseAdmin.from('audit_records').insert({
+          audit_type: 'qualification',
+          target_id: qualificationId,
+          target_table: 'qualifications',
+          status: 'approved',
+          submitted_by: null,
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+        });
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'reject_qualification': {
+        const { qualificationId, reason } = params;
+        
+        if (!reason) {
+          return new Response(
+            JSON.stringify({ error: '请填写驳回原因' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateError } = await supabaseAdmin
+          .from('qualifications')
+          .update({
+            status: 'rejected',
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: user.id,
+            rejection_reason: reason,
+          })
+          .eq('id', qualificationId);
+
+        if (updateError) throw updateError;
+
+        // 记录审核日志
+        await supabaseAdmin.from('audit_records').insert({
+          audit_type: 'qualification',
+          target_id: qualificationId,
+          target_table: 'qualifications',
+          status: 'rejected',
+          submitted_by: null,
+          reviewed_by: user.id,
+          review_comment: reason,
+          reviewed_at: new Date().toISOString(),
+        });
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: '未知操作' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Admin API error:', errorMessage);

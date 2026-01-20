@@ -69,7 +69,11 @@ interface User {
   backend_roles?: string[];
 }
 
-export default function DeptRoles() {
+interface DeptRolesProps {
+  embedded?: boolean;
+}
+
+export default function DeptRoles({ embedded = false }: DeptRolesProps) {
   const { currentRole } = useAuth();
   const [roles, setRoles] = useState<BackendRole[]>([]);
   const [menus, setMenus] = useState<MenuPermission[]>([]);
@@ -227,7 +231,8 @@ export default function DeptRoles() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">后台角色管理</h1>
+        {!embedded && <h1 className="text-2xl font-bold">后台角色管理</h1>}
+        {embedded && <div />}
         <Button onClick={handleCreateRole}>
           <Plus className="mr-2 h-4 w-4" />
           新建角色
