@@ -91,7 +91,6 @@ const emptyProduct = {
   price: 0,
   min_order_quantity: 1,
   lead_time_days: 0,
-  is_self_produced: true,
 };
 
 export default function SupplierProducts() {
