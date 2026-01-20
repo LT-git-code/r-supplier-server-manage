@@ -4,10 +4,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { AppHeader } from './AppHeader';
 import { AppSidebar } from './AppSidebar';
 import { MobileSidebar } from './MobileSidebar';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export function AppLayout() {
-  const { user, loading, authUser } = useAuth();
+  const { user, loading, authUser, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   if (loading) {
@@ -27,6 +28,10 @@ export function AppLayout() {
 
   // 如果用户没有任何角色，显示等待审核提示
   if (!authUser?.roles.length) {
+    const handleBackToLogin = async () => {
+      await signOut();
+    };
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="text-center max-w-md">
@@ -37,12 +42,22 @@ export function AppLayout() {
           <p className="text-muted-foreground mb-6">
             您的账户正在等待管理员审核，审核通过后即可使用系统。
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="text-primary hover:underline text-sm"
-          >
-            刷新页面
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="text-primary hover:underline text-sm"
+            >
+              刷新页面
+            </button>
+            <Button
+              variant="outline"
+              onClick={handleBackToLogin}
+              className="mx-auto"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              返回登录
+            </Button>
+          </div>
         </div>
       </div>
     );
