@@ -261,19 +261,21 @@ serve(async (req) => {
       case 'get_user_menus': {
         const { terminal } = params;
         
-        // 管理员可以访问所有菜单
+        // 获取该终端的所有基础菜单
+        const { data: allMenus, error: menuError } = await supabaseAdmin
+          .from('menu_permissions')
+          .select('id, menu_key, menu_name, menu_path, parent_key, sort_order, icon')
+          .eq('terminal', terminal)
+          .eq('is_active', true)
+          .order('sort_order');
+
+        if (menuError) throw menuError;
+
+        // 管理员可以访问所有菜单，并且可以管理所有终端的权限
         if (isAdmin) {
-          const { data: menus, error } = await supabaseAdmin
-            .from('menu_permissions')
-            .select('menu_key, menu_name, menu_path, parent_key, sort_order, icon')
-            .eq('terminal', terminal)
-            .eq('is_active', true)
-            .order('sort_order');
-
-          if (error) throw error;
-
+          const menusWithoutId = allMenus?.map(({ id, ...rest }) => rest) || [];
           return new Response(
-            JSON.stringify({ menus }),
+            JSON.stringify({ menus: menusWithoutId }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -286,40 +288,39 @@ serve(async (req) => {
 
         const roleIds = userBackendRoles?.map(r => r.role_id) || [];
 
+        // 如果用户没有分配后台角色，返回所有基础菜单（不受角色限制）
         if (roleIds.length === 0) {
+          const menusWithoutId = allMenus?.map(({ id, ...rest }) => rest) || [];
           return new Response(
-            JSON.stringify({ menus: [] }),
+            JSON.stringify({ menus: menusWithoutId }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // 获取角色对应的菜单
+        // 获取角色对应的菜单权限
         const { data: roleMenus } = await supabaseAdmin
           .from('role_menu_permissions')
           .select('menu_id')
           .in('role_id', roleIds);
 
-        const menuIds = [...new Set(roleMenus?.map(rm => rm.menu_id) || [])];
+        const allowedMenuIds = new Set(roleMenus?.map(rm => rm.menu_id) || []);
 
-        if (menuIds.length === 0) {
+        // 如果角色没有配置任何菜单权限，返回所有基础菜单
+        if (allowedMenuIds.size === 0) {
+          const menusWithoutId = allMenus?.map(({ id, ...rest }) => rest) || [];
           return new Response(
-            JSON.stringify({ menus: [] }),
+            JSON.stringify({ menus: menusWithoutId }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        const { data: menus, error } = await supabaseAdmin
-          .from('menu_permissions')
-          .select('menu_key, menu_name, menu_path, parent_key, sort_order, icon')
-          .in('id', menuIds)
-          .eq('terminal', terminal)
-          .eq('is_active', true)
-          .order('sort_order');
-
-        if (error) throw error;
+        // 根据角色权限过滤菜单
+        const filteredMenus = allMenus
+          ?.filter(menu => allowedMenuIds.has(menu.id))
+          .map(({ id, ...rest }) => rest) || [];
 
         return new Response(
-          JSON.stringify({ menus }),
+          JSON.stringify({ menus: filteredMenus }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
