@@ -53,14 +53,13 @@ serve(async (req) => {
       );
     }
 
-    // 获取用户所属部门（用于启用/停用操作）
+    // 获取用户所属部门（仅用于插入记录时的外键）
     const { data: userDepts } = await supabaseAdmin
       .from('user_departments')
       .select('department_id')
       .eq('user_id', user.id);
 
-    const deptIds = userDepts?.map(d => d.department_id) || [];
-    const primaryDeptId = deptIds[0]; // 使用第一个部门作为主部门
+    const primaryDeptId = userDepts?.[0]?.department_id;
 
     const { action, ...params } = await req.json();
     console.log('Dept API action:', action, params);
@@ -76,24 +75,18 @@ serve(async (req) => {
 
         if (suppliersError) throw suppliersError;
 
-        // 获取当前用户部门的启用状态
-        let deptSupplierMap: Record<string, { id: string; library_type: string }> = {};
-        if (primaryDeptId) {
-          const { data: deptSuppliers } = await supabaseAdmin
-            .from('department_suppliers')
-            .select('id, supplier_id, library_type')
-            .eq('department_id', primaryDeptId);
-          
-          deptSuppliers?.forEach(ds => {
-            deptSupplierMap[ds.supplier_id] = { id: ds.id, library_type: ds.library_type };
-          });
-        }
+        // 获取全局启用状态（任意部门启用即视为启用）
+        const { data: allDeptSuppliers } = await supabaseAdmin
+          .from('department_suppliers')
+          .select('supplier_id, library_type')
+          .eq('library_type', 'current');
+
+        const enabledSupplierIds = new Set(allDeptSuppliers?.map(ds => ds.supplier_id) || []);
 
         // 合并供应商数据与启用状态
         const suppliers = allSuppliers?.map(s => ({
           ...s,
-          dept_supplier_id: deptSupplierMap[s.id]?.id || null,
-          library_type: deptSupplierMap[s.id]?.library_type || 'disabled',
+          library_type: enabledSupplierIds.has(s.id) ? 'current' : 'disabled',
         })) || [];
 
         return new Response(
@@ -112,20 +105,20 @@ serve(async (req) => {
           );
         }
 
-        // 检查是否已存在记录
+        // 检查是否已存在任何部门的记录
         const { data: existing } = await supabaseAdmin
           .from('department_suppliers')
-          .select('id')
-          .eq('department_id', primaryDeptId)
+          .select('id, department_id')
           .eq('supplier_id', supplierId)
+          .limit(1)
           .maybeSingle();
 
         if (existing) {
-          // 更新现有记录
+          // 更新现有记录为启用
           const { error } = await supabaseAdmin
             .from('department_suppliers')
             .update({ library_type: 'current' })
-            .eq('id', existing.id);
+            .eq('supplier_id', supplierId);
           if (error) throw error;
         } else {
           // 创建新记录
@@ -148,18 +141,11 @@ serve(async (req) => {
 
       case 'disable_supplier': {
         const { supplierId } = params;
-        
-        if (!primaryDeptId) {
-          return new Response(
-            JSON.stringify({ error: '用户未分配部门' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
 
+        // 更新所有该供应商的记录为停用
         const { error } = await supabaseAdmin
           .from('department_suppliers')
           .update({ library_type: 'disabled' })
-          .eq('department_id', primaryDeptId)
           .eq('supplier_id', supplierId);
 
         if (error) throw error;
@@ -171,17 +157,13 @@ serve(async (req) => {
       }
 
       case 'get_dept_products': {
-        // 获取当前用户部门启用的供应商ID列表
-        let supplierIds: string[] = [];
-        if (primaryDeptId) {
-          const { data: deptSuppliers } = await supabaseAdmin
-            .from('department_suppliers')
-            .select('supplier_id')
-            .eq('department_id', primaryDeptId)
-            .eq('library_type', 'current');
-          
-          supplierIds = deptSuppliers?.map(s => s.supplier_id) || [];
-        }
+        // 获取全局启用的供应商ID列表
+        const { data: enabledSuppliers } = await supabaseAdmin
+          .from('department_suppliers')
+          .select('supplier_id')
+          .eq('library_type', 'current');
+        
+        const supplierIds = enabledSuppliers?.map(s => s.supplier_id) || [];
         
         if (supplierIds.length === 0) {
           return new Response(
