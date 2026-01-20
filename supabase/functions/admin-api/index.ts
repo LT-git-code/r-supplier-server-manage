@@ -165,6 +165,78 @@ serve(async (req) => {
         );
       }
 
+      case 'update_user': {
+        const { userId, fullName, roles: targetRoles, departmentId } = params;
+        
+        // 更新profile
+        if (fullName !== undefined) {
+          await supabaseAdmin
+            .from('profiles')
+            .update({ full_name: fullName })
+            .eq('user_id', userId);
+        }
+
+        // 更新角色
+        if (targetRoles !== undefined) {
+          await supabaseAdmin
+            .from('user_roles')
+            .delete()
+            .eq('user_id', userId);
+
+          if (targetRoles && targetRoles.length > 0) {
+            const roleInserts = targetRoles.map((role: string) => ({
+              user_id: userId,
+              role
+            }));
+            await supabaseAdmin.from('user_roles').insert(roleInserts);
+          }
+        }
+
+        // 更新部门
+        if (departmentId !== undefined) {
+          await supabaseAdmin
+            .from('user_departments')
+            .delete()
+            .eq('user_id', userId);
+
+          if (departmentId) {
+            await supabaseAdmin.from('user_departments').insert({
+              user_id: userId,
+              department_id: departmentId
+            });
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'update_user_roles': {
+        const { userId, roles: targetRoles } = params;
+        
+        // 删除现有角色
+        await supabaseAdmin
+          .from('user_roles')
+          .delete()
+          .eq('user_id', userId);
+
+        // 添加新角色
+        if (targetRoles && targetRoles.length > 0) {
+          const roleInserts = targetRoles.map((role: string) => ({
+            user_id: userId,
+            role
+          }));
+          await supabaseAdmin.from('user_roles').insert(roleInserts);
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       case 'update_user_department': {
         const { userId, departmentId, isManager } = params;
         
