@@ -12,13 +12,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Eye, Building2, Package, FileCheck } from 'lucide-react';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Search, Power, PowerOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -28,46 +31,22 @@ interface Supplier {
   supplier_type: string;
   contact_name: string;
   contact_phone: string;
-  contact_email?: string;
-  address?: string;
-  province?: string;
-  city?: string;
   status: string;
   main_products: string;
-  business_scope?: string;
-  registered_capital?: number;
-  employee_count?: number;
-  establishment_date?: string;
-}
-
-interface SupplierDetail {
-  supplier: Supplier;
-  products: Array<{
-    id: string;
-    name: string;
-    code: string;
-    unit: string;
-    price: number;
-    specifications: string;
-  }>;
-  qualifications: Array<{
-    id: string;
-    name: string;
-    certificate_number: string;
-    issuing_authority: string;
-    issue_date: string;
-    expire_date: string;
-    status: string;
-  }>;
+  dept_supplier_id: string | null;
+  library_type: string;
 }
 
 export default function DeptSuppliers() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selectedSupplier, setSelectedSupplier] = useState<SupplierDetail | null>(null);
-  const [showDetail, setShowDetail] = useState(false);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    type: 'enable' | 'disable';
+    supplier?: Supplier;
+  }>({ open: false, type: 'enable' });
 
   const fetchSuppliers = async () => {
     setLoading(true);
@@ -85,26 +64,30 @@ export default function DeptSuppliers() {
     }
   };
 
-  const fetchSupplierDetail = async (supplierId: string) => {
-    setLoadingDetail(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('dept-api', {
-        body: { action: 'get_supplier_detail', supplierId },
-      });
-      if (error) throw error;
-      setSelectedSupplier(data);
-      setShowDetail(true);
-    } catch (error) {
-      console.error('Error fetching supplier detail:', error);
-      toast.error('获取供应商详情失败');
-    } finally {
-      setLoadingDetail(false);
-    }
-  };
-
   useEffect(() => {
     fetchSuppliers();
   }, []);
+
+  const handleToggleSupplier = async (supplierId: string, enable: boolean) => {
+    setActionLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('dept-api', {
+        body: { 
+          action: enable ? 'enable_supplier' : 'disable_supplier', 
+          supplierId 
+        },
+      });
+      if (error) throw error;
+      toast.success(enable ? '供应商已启用' : '供应商已停用');
+      fetchSuppliers();
+      setConfirmDialog({ open: false, type: enable ? 'enable' : 'disable' });
+    } catch (error) {
+      console.error('Error toggling supplier:', error);
+      toast.error('操作失败');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const getSupplierTypeBadge = (type: string) => {
     const variants: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
@@ -122,10 +105,21 @@ export default function DeptSuppliers() {
     s.main_products?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const enabledCount = suppliers.filter(s => s.library_type === 'current').length;
+  const disabledCount = suppliers.length - enabledCount;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">供应商管理</h1>
+        <div className="flex gap-4 text-sm">
+          <span className="text-muted-foreground">
+            已启用: <span className="font-medium text-green-600">{enabledCount}</span>
+          </span>
+          <span className="text-muted-foreground">
+            已停用: <span className="font-medium text-gray-500">{disabledCount}</span>
+          </span>
+        </div>
       </div>
 
       <Card>
@@ -154,19 +148,20 @@ export default function DeptSuppliers() {
                   <TableHead>联系人</TableHead>
                   <TableHead>联系电话</TableHead>
                   <TableHead>主营产品</TableHead>
+                  <TableHead>状态</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       加载中...
                     </TableCell>
                   </TableRow>
                 ) : filteredSuppliers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       暂无已批准的供应商
                     </TableCell>
                   </TableRow>
@@ -174,14 +169,7 @@ export default function DeptSuppliers() {
                   filteredSuppliers.map((supplier) => (
                     <TableRow key={supplier.id}>
                       <TableCell className="font-medium">
-                        <Button
-                          variant="link"
-                          className="p-0 h-auto"
-                          onClick={() => fetchSupplierDetail(supplier.id)}
-                          disabled={loadingDetail}
-                        >
-                          {supplier.company_name || '-'}
-                        </Button>
+                        {supplier.company_name || '-'}
                       </TableCell>
                       <TableCell>
                         {getSupplierTypeBadge(supplier.supplier_type)}
@@ -191,16 +179,41 @@ export default function DeptSuppliers() {
                       <TableCell className="max-w-[200px] truncate">
                         {supplier.main_products || '-'}
                       </TableCell>
+                      <TableCell>
+                        <Badge variant={supplier.library_type === 'current' ? 'default' : 'secondary'}>
+                          {supplier.library_type === 'current' ? '已启用' : '已停用'}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => fetchSupplierDetail(supplier.id)}
-                          disabled={loadingDetail}
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          查看详情
-                        </Button>
+                        {supplier.library_type === 'current' ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmDialog({ 
+                              open: true, 
+                              type: 'disable', 
+                              supplier 
+                            })}
+                            disabled={actionLoading}
+                          >
+                            <PowerOff className="h-4 w-4 mr-1" />
+                            停用
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmDialog({ 
+                              open: true, 
+                              type: 'enable', 
+                              supplier 
+                            })}
+                            disabled={actionLoading}
+                          >
+                            <Power className="h-4 w-4 mr-1" />
+                            启用
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -211,168 +224,38 @@ export default function DeptSuppliers() {
         </CardContent>
       </Card>
 
-      {/* 供应商详情弹窗 */}
-      <Dialog open={showDetail} onOpenChange={setShowDetail}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              {selectedSupplier?.supplier.company_name}
-              {selectedSupplier?.supplier.supplier_type && 
-                getSupplierTypeBadge(selectedSupplier.supplier.supplier_type)}
-            </DialogTitle>
-          </DialogHeader>
-
-          {selectedSupplier && (
-            <Tabs defaultValue="info" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="info">
-                  <Building2 className="h-4 w-4 mr-2" />
-                  基本信息
-                </TabsTrigger>
-                <TabsTrigger value="products">
-                  <Package className="h-4 w-4 mr-2" />
-                  产品列表
-                </TabsTrigger>
-                <TabsTrigger value="qualifications">
-                  <FileCheck className="h-4 w-4 mr-2" />
-                  资质证书
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="info" className="mt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">联系人</div>
-                    <div>{selectedSupplier.supplier.contact_name || '-'}</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">联系电话</div>
-                    <div>{selectedSupplier.supplier.contact_phone || '-'}</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">联系邮箱</div>
-                    <div>{selectedSupplier.supplier.contact_email || '-'}</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">地区</div>
-                    <div>
-                      {[selectedSupplier.supplier.province, selectedSupplier.supplier.city]
-                        .filter(Boolean).join(' ') || '-'}
-                    </div>
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <div className="text-sm text-muted-foreground">详细地址</div>
-                    <div>{selectedSupplier.supplier.address || '-'}</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">注册资本</div>
-                    <div>
-                      {selectedSupplier.supplier.registered_capital 
-                        ? `${selectedSupplier.supplier.registered_capital}万元` 
-                        : '-'}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">员工人数</div>
-                    <div>
-                      {selectedSupplier.supplier.employee_count 
-                        ? `${selectedSupplier.supplier.employee_count}人` 
-                        : '-'}
-                    </div>
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <div className="text-sm text-muted-foreground">主营产品</div>
-                    <div>{selectedSupplier.supplier.main_products || '-'}</div>
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <div className="text-sm text-muted-foreground">经营范围</div>
-                    <div>{selectedSupplier.supplier.business_scope || '-'}</div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="products" className="mt-4">
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>产品名称</TableHead>
-                        <TableHead>产品编码</TableHead>
-                        <TableHead>单位</TableHead>
-                        <TableHead>单价</TableHead>
-                        <TableHead>规格</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedSupplier.products.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                            暂无产品
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        selectedSupplier.products.map((product) => (
-                          <TableRow key={product.id}>
-                            <TableCell className="font-medium">{product.name}</TableCell>
-                            <TableCell>{product.code || '-'}</TableCell>
-                            <TableCell>{product.unit || '-'}</TableCell>
-                            <TableCell>
-                              {product.price ? `¥${product.price.toFixed(2)}` : '-'}
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate">
-                              {product.specifications || '-'}
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="qualifications" className="mt-4">
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>证书名称</TableHead>
-                        <TableHead>证书编号</TableHead>
-                        <TableHead>颁发机构</TableHead>
-                        <TableHead>有效期至</TableHead>
-                        <TableHead>状态</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedSupplier.qualifications.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                            暂无资质证书
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        selectedSupplier.qualifications.map((qual) => (
-                          <TableRow key={qual.id}>
-                            <TableCell className="font-medium">{qual.name}</TableCell>
-                            <TableCell>{qual.certificate_number || '-'}</TableCell>
-                            <TableCell>{qual.issuing_authority || '-'}</TableCell>
-                            <TableCell>{qual.expire_date || '-'}</TableCell>
-                            <TableCell>
-                              <Badge variant={qual.status === 'approved' ? 'default' : 'secondary'}>
-                                {qual.status === 'approved' ? '已审核' : qual.status === 'pending' ? '待审核' : '已拒绝'}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </TabsContent>
-            </Tabs>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* 确认弹窗 */}
+      <AlertDialog 
+        open={confirmDialog.open} 
+        onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDialog.type === 'enable' ? '启用供应商' : '停用供应商'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDialog.type === 'enable' 
+                ? `确定要启用供应商「${confirmDialog.supplier?.company_name}」吗？启用后该供应商的产品将显示在产品管理列表中。`
+                : `确定要停用供应商「${confirmDialog.supplier?.company_name}」吗？停用后该供应商的产品将不再显示在产品管理列表中。`
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmDialog.supplier) {
+                  handleToggleSupplier(confirmDialog.supplier.id, confirmDialog.type === 'enable');
+                }
+              }}
+              disabled={actionLoading}
+            >
+              {actionLoading ? '处理中...' : '确定'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
