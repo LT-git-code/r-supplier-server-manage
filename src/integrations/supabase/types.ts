@@ -89,6 +89,36 @@ export type Database = {
         }
         Relationships: []
       }
+      backend_roles: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       complaints: {
         Row: {
           attachments: string[] | null
@@ -216,6 +246,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      menu_permissions: {
+        Row: {
+          created_at: string
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          menu_key: string
+          menu_name: string
+          menu_path: string
+          parent_key: string | null
+          sort_order: number | null
+          terminal: string
+        }
+        Insert: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          menu_key: string
+          menu_name: string
+          menu_path: string
+          parent_key?: string | null
+          sort_order?: number | null
+          terminal: string
+        }
+        Update: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          menu_key?: string
+          menu_name?: string
+          menu_path?: string
+          parent_key?: string | null
+          sort_order?: number | null
+          terminal?: string
+        }
+        Relationships: []
       }
       operation_logs: {
         Row: {
@@ -594,6 +663,42 @@ export type Database = {
         }
         Relationships: []
       }
+      role_menu_permissions: {
+        Row: {
+          created_at: string
+          id: string
+          menu_id: string
+          role_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          menu_id: string
+          role_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          menu_id?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_menu_permissions_menu_id_fkey"
+            columns: ["menu_id"]
+            isOneToOne: false
+            referencedRelation: "menu_permissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_menu_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "backend_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_contacts: {
         Row: {
           created_at: string
@@ -749,6 +854,35 @@ export type Database = {
         }
         Relationships: []
       }
+      user_backend_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_backend_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "backend_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_departments: {
         Row: {
           created_at: string
@@ -808,6 +942,17 @@ export type Database = {
     }
     Functions: {
       get_user_department_ids: { Args: { _user_id: string }; Returns: string[] }
+      get_user_menus: {
+        Args: { _terminal: string; _user_id: string }
+        Returns: {
+          icon: string
+          menu_key: string
+          menu_name: string
+          menu_path: string
+          parent_key: string
+          sort_order: number
+        }[]
+      }
       get_user_supplier_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {

@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -7,15 +8,16 @@ import {
   Package,
   FileCheck,
   FileText,
-  MessageSquare,
   Users,
   CheckCircle,
   Settings,
   BarChart3,
   FolderOpen,
   Bell,
-  Search,
+  Shield,
+  Briefcase,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NavItem {
   title: string;
@@ -24,32 +26,85 @@ interface NavItem {
   roles: ('supplier' | 'department' | 'admin')[];
 }
 
-const navItems: NavItem[] = [
-  // 供应商菜单
-  { title: '工作台', href: '/dashboard', icon: LayoutDashboard, roles: ['supplier', 'department', 'admin'] },
+// 供应商固定菜单（不需要后台角色控制）
+const supplierNavItems: NavItem[] = [
+  { title: '工作台', href: '/dashboard', icon: LayoutDashboard, roles: ['supplier'] },
   { title: '信息管理', href: '/supplier/info', icon: Building2, roles: ['supplier'] },
   { title: '产品服务', href: '/supplier/products', icon: Package, roles: ['supplier'] },
   { title: '资质提交', href: '/supplier/qualifications', icon: FileCheck, roles: ['supplier'] },
   { title: '报表上报', href: '/supplier/reports', icon: FileText, roles: ['supplier'] },
-  
-  // 部门菜单
-  { title: '供应商库', href: '/dept/suppliers', icon: FolderOpen, roles: ['department'] },
-  { title: '产品搜索', href: '/dept/products', icon: Search, roles: ['department'] },
-  
-  // 管理员菜单
-  { title: '数据看板', href: '/admin/dashboard', icon: BarChart3, roles: ['admin'] },
-  { title: '用户管理', href: '/admin/users', icon: Users, roles: ['admin'] },
-  { title: '供应商审核', href: '/admin/audit', icon: CheckCircle, roles: ['admin'] },
-  { title: '供应商管理', href: '/admin/suppliers', icon: Building2, roles: ['admin'] },
-  { title: '产品管理', href: '/admin/products', icon: Package, roles: ['admin'] },
-  { title: '报表管理', href: '/admin/reports', icon: FileText, roles: ['admin'] },
-  { title: '公告管理', href: '/admin/announcements', icon: Bell, roles: ['admin'] },
-  { title: '系统设置', href: '/admin/settings', icon: Settings, roles: ['admin'] },
 ];
 
+// 图标映射
+const iconMap: Record<string, React.ElementType> = {
+  LayoutDashboard,
+  Building2,
+  Package,
+  FileCheck,
+  FileText,
+  Users,
+  CheckCircle,
+  Settings,
+  BarChart3,
+  FolderOpen,
+  Bell,
+  Shield,
+  Briefcase,
+};
+
+interface DynamicMenu {
+  menu_key: string;
+  menu_name: string;
+  menu_path: string;
+  icon: string;
+  sort_order: number;
+}
+
 export function AppSidebar() {
-  const { currentRole } = useAuth();
+  const { currentRole, user } = useAuth();
   const location = useLocation();
+  const [dynamicMenus, setDynamicMenus] = useState<DynamicMenu[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // 获取动态菜单
+  useEffect(() => {
+    const fetchMenus = async () => {
+      if (!user || !currentRole || currentRole === 'supplier') return;
+      
+      setLoading(true);
+      try {
+        const terminal = currentRole === 'admin' ? 'admin' : 'department';
+        const { data, error } = await supabase.functions.invoke('roles-api', {
+          body: { action: 'get_user_menus', terminal },
+        });
+        
+        if (!error && data?.menus) {
+          setDynamicMenus(data.menus);
+        }
+      } catch (error) {
+        console.error('Error fetching menus:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMenus();
+  }, [user, currentRole]);
+
+  // 构建导航项
+  const navItems = useMemo(() => {
+    if (currentRole === 'supplier') {
+      return supplierNavItems;
+    }
+
+    // 管理员和部门用户使用动态菜单
+    return dynamicMenus.map(menu => ({
+      title: menu.menu_name,
+      href: menu.menu_path,
+      icon: iconMap[menu.icon] || LayoutDashboard,
+      roles: [currentRole] as ('supplier' | 'department' | 'admin')[],
+    }));
+  }, [currentRole, dynamicMenus]);
 
   const filteredItems = navItems.filter(item => 
     currentRole && item.roles.includes(currentRole)
@@ -76,30 +131,34 @@ export function AppSidebar() {
 
       {/* 导航菜单 */}
       <nav className="flex-1 overflow-y-auto py-4">
-        <ul className="space-y-1 px-2">
-          {filteredItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.href || 
-                           location.pathname.startsWith(item.href + '/');
-            
-            return (
-              <li key={item.href}>
-                <NavLink
-                  to={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span>{item.title}</span>
-                </NavLink>
-              </li>
-            );
-          })}
-        </ul>
+        {loading ? (
+          <div className="px-4 py-2 text-sm text-sidebar-muted">加载菜单中...</div>
+        ) : (
+          <ul className="space-y-1 px-2">
+            {filteredItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.href || 
+                             location.pathname.startsWith(item.href + '/');
+              
+              return (
+                <li key={item.href}>
+                  <NavLink
+                    to={item.href}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                        : 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>{item.title}</span>
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </nav>
 
       {/* 底部信息 */}
