@@ -85,6 +85,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, fetchUserData]);
 
+  const assignPendingRole = useCallback(async (userId: string) => {
+    const pendingRole = localStorage.getItem('pending_role');
+    if (!pendingRole) return;
+
+    try {
+      // 检查用户是否已有角色
+      const { data: existingRoles } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId);
+
+      if (existingRoles && existingRoles.length > 0) {
+        // 用户已有角色，清除pending
+        localStorage.removeItem('pending_role');
+        return;
+      }
+
+      // 分配角色
+      const { error } = await supabase
+        .from('user_roles')
+        .insert({ user_id: userId, role: pendingRole as 'supplier' | 'department' | 'admin' });
+
+      if (!error) {
+        console.log('Auto-assigned role:', pendingRole);
+      } else {
+        console.error('Failed to assign role:', error);
+      }
+    } catch (e) {
+      console.error('Error assigning pending role:', e);
+    } finally {
+      localStorage.removeItem('pending_role');
+    }
+  }, []);
+
   useEffect(() => {
     // 首先设置认证状态监听器
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -95,6 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 延迟获取用户数据，避免死锁
         if (session?.user) {
           setTimeout(async () => {
+            // 检查是否需要分配待定角色
+            await assignPendingRole(session.user.id);
+            
             const userData = await fetchUserData(session.user.id, session.user.email || '');
             setAuthUser(userData);
             
@@ -116,30 +153,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // 然后检查现有会话
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        fetchUserData(session.user.id, session.user.email || '').then(userData => {
-          setAuthUser(userData);
-          
-          const savedRole = localStorage.getItem('srm_current_role') as AppRole | null;
-          if (savedRole && userData?.roles.includes(savedRole)) {
-            setCurrentRoleState(savedRole);
-          } else if (userData?.roles.length) {
-            setCurrentRoleState(userData.roles[0]);
-          }
-          
-          setLoading(false);
-        });
+        // 检查是否需要分配待定角色
+        await assignPendingRole(session.user.id);
+        
+        const userData = await fetchUserData(session.user.id, session.user.email || '');
+        setAuthUser(userData);
+        
+        const savedRole = localStorage.getItem('srm_current_role') as AppRole | null;
+        if (savedRole && userData?.roles.includes(savedRole)) {
+          setCurrentRoleState(savedRole);
+        } else if (userData?.roles.length) {
+          setCurrentRoleState(userData.roles[0]);
+        }
+        
+        setLoading(false);
       } else {
         setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchUserData]);
+  }, [fetchUserData, assignPendingRole]);
 
   const setCurrentRole = useCallback((role: AppRole) => {
     if (authUser?.roles.includes(role)) {

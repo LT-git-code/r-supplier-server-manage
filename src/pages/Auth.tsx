@@ -95,9 +95,15 @@ export default function Auth() {
     setError(null);
     setSuccessMessage(null);
     
+    // 存储选择的角色，供注册后自动分配
+    if (selectedRole) {
+      localStorage.setItem('pending_role', selectedRole);
+    }
+    
     const { error } = await signUp(email, password);
     
     if (error) {
+      localStorage.removeItem('pending_role');
       if (error.message.includes('User already registered')) {
         setError('该邮箱已被注册');
       } else {
@@ -246,7 +252,7 @@ export default function Auth() {
         <Alert>
           <ShieldCheck className="h-4 w-4" />
           <AlertDescription>
-            部门人员注册后需要等待管理员审核分配权限
+            部门人员注册后即可登录使用系统
           </AlertDescription>
         </Alert>
       )}
