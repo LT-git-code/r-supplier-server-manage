@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Building2, AlertCircle, Users, ShieldCheck } from 'lucide-react';
 import { z } from 'zod';
 
@@ -16,12 +14,6 @@ const emailSchema = z.string().email('请输入有效的邮箱地址');
 const passwordSchema = z.string().min(6, '密码至少需要6个字符');
 
 type RegisterRole = 'supplier' | 'department' | null;
-
-interface Department {
-  id: string;
-  name: string;
-  code: string | null;
-}
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -36,80 +28,19 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<RegisterRole>(null);
-  
-  // 部门相关状态
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [position, setPosition] = useState('');
-  const [loadingDepartments, setLoadingDepartments] = useState(false);
-
-  // 加载部门列表
-  useEffect(() => {
-    const fetchDepartments = async () => {
-      setLoadingDepartments(true);
-      try {
-        const { data, error } = await supabase
-          .from('departments')
-          .select('id, name, code')
-          .eq('is_active', true)
-          .order('name');
-        
-        if (error) throw error;
-        setDepartments(data || []);
-      } catch (error) {
-        console.error('Failed to fetch departments:', error);
-      } finally {
-        setLoadingDepartments(false);
-      }
-    };
-
-    if (selectedRole === 'department') {
-      fetchDepartments();
-    }
-  }, [selectedRole]);
 
   useEffect(() => {
     if (!loading && user) {
       // 检查是否需要跳转到供应商注册页面
       const pendingSupplierRegister = localStorage.getItem('pending_supplier_register');
-      const pendingDeptRegister = localStorage.getItem('pending_department_register');
-      
       if (pendingSupplierRegister === 'true') {
         localStorage.removeItem('pending_supplier_register');
         navigate('/supplier/register');
-      } else if (pendingDeptRegister) {
-        // 部门注册需要提交申请
-        const deptData = JSON.parse(pendingDeptRegister);
-        submitDepartmentRegistration(deptData);
       } else {
         navigate('/');
       }
     }
   }, [user, loading, navigate]);
-
-  const submitDepartmentRegistration = async (deptData: any) => {
-    try {
-      const { error } = await supabase
-        .from('department_registrations')
-        .insert({
-          user_id: user!.id,
-          department_id: deptData.departmentId,
-          full_name: deptData.fullName,
-          phone: deptData.phone,
-          position: deptData.position,
-        });
-
-      if (error) throw error;
-      localStorage.removeItem('pending_department_register');
-      navigate('/');
-    } catch (error) {
-      console.error('Failed to submit department registration:', error);
-      localStorage.removeItem('pending_department_register');
-      navigate('/');
-    }
-  };
 
   const validateForm = () => {
     setError(null);
@@ -129,18 +60,6 @@ export default function Auth() {
     if (activeTab === 'register' && password !== confirmPassword) {
       setError('两次输入的密码不一致');
       return false;
-    }
-
-    // 部门注册验证
-    if (activeTab === 'register' && selectedRole === 'department') {
-      if (!selectedDepartment) {
-        setError('请选择要加入的部门');
-        return false;
-      }
-      if (!fullName.trim()) {
-        setError('请输入您的姓名');
-        return false;
-      }
     }
     
     return true;
@@ -188,24 +107,12 @@ export default function Auth() {
       // 如果选择了供应商角色，标记需要跳转到供应商注册页面
       if (selectedRole === 'supplier') {
         localStorage.setItem('pending_supplier_register', 'true');
-      } else if (selectedRole === 'department') {
-        // 部门角色需要保存选择的部门信息
-        localStorage.setItem('pending_department_register', JSON.stringify({
-          departmentId: selectedDepartment,
-          fullName: fullName,
-          phone: phone,
-          position: position,
-        }));
       }
       setSuccessMessage('注册成功！您现在可以登录了。');
       setActiveTab('login');
       setPassword('');
       setConfirmPassword('');
       setSelectedRole(null);
-      setSelectedDepartment('');
-      setFullName('');
-      setPhone('');
-      setPosition('');
     }
     
     setIsSubmitting(false);
@@ -334,71 +241,14 @@ export default function Auth() {
           required
         />
       </div>
-
-      {/* 部门用户额外信息 */}
+      
       {selectedRole === 'department' && (
-        <>
-          <div className="space-y-2">
-            <Label htmlFor="department">选择部门 *</Label>
-            <Select
-              value={selectedDepartment}
-              onValueChange={setSelectedDepartment}
-              disabled={isSubmitting || loadingDepartments}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={loadingDepartments ? "加载中..." : "请选择要加入的部门"} />
-              </SelectTrigger>
-              <SelectContent>
-                {departments.map((dept) => (
-                  <SelectItem key={dept.id} value={dept.id}>
-                    {dept.name} {dept.code && `(${dept.code})`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="fullName">姓名 *</Label>
-            <Input
-              id="fullName"
-              placeholder="请输入您的姓名"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              disabled={isSubmitting}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="phone">联系电话</Label>
-            <Input
-              id="phone"
-              placeholder="请输入联系电话"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="position">职位</Label>
-            <Input
-              id="position"
-              placeholder="请输入您的职位"
-              value={position}
-              onChange={(e) => setPosition(e.target.value)}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <Alert>
-            <ShieldCheck className="h-4 w-4" />
-            <AlertDescription>
-              部门人员注册后需要等待管理员审核分配权限
-            </AlertDescription>
-          </Alert>
-        </>
+        <Alert>
+          <ShieldCheck className="h-4 w-4" />
+          <AlertDescription>
+            部门人员注册后需要等待管理员审核分配权限
+          </AlertDescription>
+        </Alert>
       )}
       
       {selectedRole === 'supplier' && (
