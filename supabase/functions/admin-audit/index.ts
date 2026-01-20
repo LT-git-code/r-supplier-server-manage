@@ -61,10 +61,7 @@ serve(async (req) => {
         
         let query = supabaseAdmin
           .from('suppliers')
-          .select(`
-            *,
-            profiles:user_id (full_name, email, phone)
-          `)
+          .select('*')
           .order('created_at', { ascending: false });
 
         if (status !== 'all') {
@@ -75,8 +72,32 @@ serve(async (req) => {
 
         if (error) throw error;
 
+        // Fetch profiles for each supplier
+        const supplierUserIds = suppliers?.map(s => s.user_id).filter(Boolean) || [];
+        let profilesMap: Record<string, any> = {};
+        
+        if (supplierUserIds.length > 0) {
+          const { data: profiles } = await supabaseAdmin
+            .from('profiles')
+            .select('user_id, full_name, email, phone')
+            .in('user_id', supplierUserIds);
+          
+          if (profiles) {
+            profilesMap = profiles.reduce((acc, p) => {
+              acc[p.user_id] = p;
+              return acc;
+            }, {} as Record<string, any>);
+          }
+        }
+
+        // Attach profile data to suppliers
+        const suppliersWithProfiles = suppliers?.map(s => ({
+          ...s,
+          profiles: profilesMap[s.user_id] || null
+        })) || [];
+
         return new Response(
-          JSON.stringify({ suppliers }),
+          JSON.stringify({ suppliers: suppliersWithProfiles }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -86,14 +107,22 @@ serve(async (req) => {
         
         const { data: supplier, error } = await supabaseAdmin
           .from('suppliers')
-          .select(`
-            *,
-            profiles:user_id (full_name, email, phone, avatar_url)
-          `)
+          .select('*')
           .eq('id', supplierId)
           .single();
 
         if (error) throw error;
+
+        // Fetch profile separately
+        let profile = null;
+        if (supplier?.user_id) {
+          const { data: profileData } = await supabaseAdmin
+            .from('profiles')
+            .select('full_name, email, phone, avatar_url')
+            .eq('user_id', supplier.user_id)
+            .maybeSingle();
+          profile = profileData;
+        }
 
         // 获取联系人
         const { data: contacts } = await supabaseAdmin
@@ -115,7 +144,7 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ 
-            supplier, 
+            supplier: { ...supplier, profiles: profile }, 
             contacts: contacts || [], 
             qualifications: qualifications || [],
             products: products || []
