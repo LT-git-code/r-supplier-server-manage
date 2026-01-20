@@ -1,1 +1,16 @@
 project_id = "anbvvwaiqikguzohozzs"
+
+[functions.admin-audit]
+verify_jwt = false
+
+[functions.admin-dashboard]
+verify_jwt = false
+
+[functions.admin-api]
+verify_jwt = false
+
+[functions.setup-admin]
+verify_jwt = false
+
+[functions.admin-suppliers]
+verify_jwt = false
