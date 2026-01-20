@@ -59,7 +59,18 @@ serve(async (req) => {
       .select('department_id')
       .eq('user_id', user.id);
 
-    const primaryDeptId = userDepts?.[0]?.department_id;
+    let primaryDeptId = userDepts?.[0]?.department_id;
+    
+    // 如果用户未分配部门，使用系统中的第一个部门作为默认
+    if (!primaryDeptId) {
+      const { data: defaultDept } = await supabaseAdmin
+        .from('departments')
+        .select('id')
+        .eq('is_active', true)
+        .limit(1)
+        .single();
+      primaryDeptId = defaultDept?.id;
+    }
 
     const { action, ...params } = await req.json();
     console.log('Dept API action:', action, params);
@@ -100,7 +111,7 @@ serve(async (req) => {
         
         if (!primaryDeptId) {
           return new Response(
-            JSON.stringify({ error: '用户未分配部门' }),
+            JSON.stringify({ error: '系统中无可用部门' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
