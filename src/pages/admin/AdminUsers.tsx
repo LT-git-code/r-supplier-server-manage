@@ -88,7 +88,11 @@ const terminalColors: Record<string, string> = {
   admin: 'bg-destructive/10 text-destructive border-destructive/30',
 };
 
-export default function AdminUsers() {
+interface AdminUsersProps {
+  embedded?: boolean;
+}
+
+export default function AdminUsers({ embedded = false }: AdminUsersProps) {
   const { authUser } = useAuth();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserData[]>([]);
@@ -316,10 +320,13 @@ export default function AdminUsers() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">用户管理</h1>
-          <p className="text-muted-foreground">管理系统用户账号和权限</p>
-        </div>
+        {!embedded && (
+          <div>
+            <h1 className="text-2xl font-bold">用户管理</h1>
+            <p className="text-muted-foreground">管理系统用户账号和权限</p>
+          </div>
+        )}
+        {embedded && <div />}
         <div className="flex gap-2">
           <Dialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen}>
             <DialogTrigger asChild>
