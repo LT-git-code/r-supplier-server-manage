@@ -22,13 +22,13 @@ serve(async (req) => {
     const { email, setupKey } = await req.json();
 
     // 简单的安全检查 - 确保只有知道设置密钥的人可以创建管理员
-    // 这个密钥可以在首次使用后更改或禁用
     const expectedSetupKey = 'SRM_INITIAL_SETUP_2024';
+    const trimmedSetupKey = (setupKey || '').trim();
     
-    if (setupKey !== expectedSetupKey) {
-      console.log('Invalid setup key provided');
+    if (trimmedSetupKey !== expectedSetupKey) {
+      console.log('Invalid setup key provided:', trimmedSetupKey, 'expected:', expectedSetupKey);
       return new Response(
-        JSON.stringify({ error: '无效的设置密钥' }),
+        JSON.stringify({ error: '无效的设置密钥，请检查输入是否正确' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

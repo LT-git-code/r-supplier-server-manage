@@ -109,7 +109,7 @@ export default function SetupAdmin() {
                 <Label htmlFor="setupKey">设置密钥</Label>
                 <Input
                   id="setupKey"
-                  type="password"
+                  type="text"
                   placeholder="请输入初始化密钥"
                   value={setupKey}
                   onChange={(e) => setSetupKey(e.target.value)}
@@ -117,8 +117,17 @@ export default function SetupAdmin() {
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  密钥: <code className="bg-muted px-1 py-0.5 rounded">SRM_INITIAL_SETUP_2024</code>
+                  请输入密钥: <strong className="text-foreground select-all">SRM_INITIAL_SETUP_2024</strong>
                 </p>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  className="mt-1"
+                  onClick={() => setSetupKey('SRM_INITIAL_SETUP_2024')}
+                >
+                  自动填入密钥
+                </Button>
               </div>
               
               <Button 
