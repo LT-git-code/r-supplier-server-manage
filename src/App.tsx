@@ -19,6 +19,11 @@ import SupplierInfo from "./pages/supplier/SupplierInfo";
 import SupplierProducts from "./pages/supplier/SupplierProducts";
 import SupplierQualifications from "./pages/supplier/SupplierQualifications";
 import SupplierReports from "./pages/supplier/SupplierReports";
+import DeptSuppliers from "./pages/dept/DeptSuppliers";
+import DeptProducts from "./pages/dept/DeptProducts";
+import DeptProjects from "./pages/dept/DeptProjects";
+import DeptServices from "./pages/dept/DeptServices";
+import DeptRoles from "./pages/dept/DeptRoles";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,8 +53,11 @@ const App = () => (
               <Route path="/supplier/reports" element={<SupplierReports />} />
               
               {/* 部门路由 */}
-              <Route path="/dept/suppliers" element={<div className="p-4">供应商库（开发中）</div>} />
-              <Route path="/dept/products" element={<div className="p-4">产品搜索（开发中）</div>} />
+              <Route path="/dept/suppliers" element={<DeptSuppliers />} />
+              <Route path="/dept/products" element={<DeptProducts />} />
+              <Route path="/dept/projects" element={<DeptProjects />} />
+              <Route path="/dept/services" element={<DeptServices />} />
+              <Route path="/dept/roles" element={<DeptRoles />} />
               
               {/* 管理员路由 */}
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -59,6 +67,7 @@ const App = () => (
               <Route path="/admin/products" element={<div className="p-4">产品管理（开发中）</div>} />
               <Route path="/admin/reports" element={<div className="p-4">报表管理（开发中）</div>} />
               <Route path="/admin/announcements" element={<div className="p-4">公告管理（开发中）</div>} />
+              <Route path="/admin/roles" element={<DeptRoles />} />
               <Route path="/admin/settings" element={<div className="p-4">系统设置（开发中）</div>} />
               
               {/* 个人设置 */}
