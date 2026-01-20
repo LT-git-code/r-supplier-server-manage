@@ -161,59 +161,6 @@ export type Database = {
         }
         Relationships: []
       }
-      department_registrations: {
-        Row: {
-          created_at: string
-          department_id: string
-          full_name: string | null
-          id: string
-          phone: string | null
-          position: string | null
-          rejection_reason: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          department_id: string
-          full_name?: string | null
-          id?: string
-          phone?: string | null
-          position?: string | null
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          department_id?: string
-          full_name?: string | null
-          id?: string
-          phone?: string | null
-          position?: string | null
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "department_registrations_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       department_suppliers: {
         Row: {
           added_by: string | null
