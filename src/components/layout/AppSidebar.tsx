@@ -27,11 +27,10 @@ interface NavItem {
 const navItems: NavItem[] = [
   // 供应商菜单
   { title: '工作台', href: '/dashboard', icon: LayoutDashboard, roles: ['supplier', 'department', 'admin'] },
-  { title: '企业信息', href: '/supplier/info', icon: Building2, roles: ['supplier'] },
-  { title: '产品管理', href: '/supplier/products', icon: Package, roles: ['supplier'] },
-  { title: '资质管理', href: '/supplier/qualifications', icon: FileCheck, roles: ['supplier'] },
-  { title: '报表填写', href: '/supplier/reports', icon: FileText, roles: ['supplier'] },
-  { title: '投诉建议', href: '/supplier/complaints', icon: MessageSquare, roles: ['supplier'] },
+  { title: '信息管理', href: '/supplier/info', icon: Building2, roles: ['supplier'] },
+  { title: '产品服务', href: '/supplier/products', icon: Package, roles: ['supplier'] },
+  { title: '资质提交', href: '/supplier/qualifications', icon: FileCheck, roles: ['supplier'] },
+  { title: '报表上报', href: '/supplier/reports', icon: FileText, roles: ['supplier'] },
   
   // 部门菜单
   { title: '供应商库', href: '/dept/suppliers', icon: FolderOpen, roles: ['department'] },
