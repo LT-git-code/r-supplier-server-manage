@@ -110,17 +110,13 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
   const [newUserDepartment, setNewUserDepartment] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // 编辑角色弹窗
-  const [editRolesDialogOpen, setEditRolesDialogOpen] = useState(false);
+  // 编辑用户弹窗
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
-  const [editRoles, setEditRoles] = useState<string[]>([]);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserRoles, setEditUserRoles] = useState<string[]>([]);
+  const [editUserDepartment, setEditUserDepartment] = useState('');
   const [saving, setSaving] = useState(false);
-
-  // 编辑部门弹窗
-  const [editDeptDialogOpen, setEditDeptDialogOpen] = useState(false);
-  const [editingDeptUser, setEditingDeptUser] = useState<UserData | null>(null);
-  const [selectedDepartment, setSelectedDepartment] = useState('');
-  const [savingDept, setSavingDept] = useState(false);
 
   // 创建部门弹窗
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
@@ -198,23 +194,25 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
     }
   };
 
-  const handleUpdateRoles = async () => {
+  const handleUpdateUser = async () => {
     if (!editingUser) return;
 
     try {
       setSaving(true);
       const { error } = await supabase.functions.invoke('admin-api', {
         body: {
-          action: 'update_user_roles',
+          action: 'update_user',
           userId: editingUser.id,
-          roles: editRoles,
+          fullName: editUserName,
+          roles: editUserRoles,
+          departmentId: editUserDepartment || null,
         },
       });
 
       if (error) throw error;
 
-      toast({ title: '终端更新成功' });
-      setEditRolesDialogOpen(false);
+      toast({ title: '用户更新成功' });
+      setEditDialogOpen(false);
       fetchData();
     } catch (error: any) {
       toast({
@@ -283,60 +281,19 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
     }
   };
 
-  const openEditRoles = (user: UserData) => {
+  const openEditUser = (user: UserData) => {
     setEditingUser(user);
-    setEditRoles([...user.roles]);
-    setEditRolesDialogOpen(true);
+    setEditUserName(user.profile?.full_name || '');
+    setEditUserRoles([...user.roles]);
+    setEditUserDepartment(user.departments[0]?.id || '');
+    setEditDialogOpen(true);
   };
 
-  const toggleRole = (role: string, checked: boolean) => {
+  const toggleEditUserRole = (role: string, checked: boolean) => {
     if (checked) {
-      setEditRoles([...editRoles, role]);
+      setEditUserRoles([...editUserRoles, role]);
     } else {
-      setEditRoles(editRoles.filter(r => r !== role));
-    }
-  };
-
-  const toggleNewUserRole = (role: string, checked: boolean) => {
-    if (checked) {
-      setNewUserRoles([...newUserRoles, role]);
-    } else {
-      setNewUserRoles(newUserRoles.filter(r => r !== role));
-    }
-  };
-
-  const openEditDepartment = (user: UserData) => {
-    setEditingDeptUser(user);
-    setSelectedDepartment(user.departments[0]?.id || '');
-    setEditDeptDialogOpen(true);
-  };
-
-  const handleUpdateDepartment = async () => {
-    if (!editingDeptUser) return;
-
-    try {
-      setSavingDept(true);
-      const { error } = await supabase.functions.invoke('admin-api', {
-        body: {
-          action: 'update_user_department',
-          userId: editingDeptUser.id,
-          departmentId: selectedDepartment || null,
-        },
-      });
-
-      if (error) throw error;
-
-      toast({ title: '部门更新成功' });
-      setEditDeptDialogOpen(false);
-      fetchData();
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: '更新失败',
-        description: error.message,
-      });
-    } finally {
-      setSavingDept(false);
+      setEditUserRoles(editUserRoles.filter(r => r !== role));
     }
   };
 
@@ -456,7 +413,13 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
                         <Checkbox
                           id={`new-terminal-${terminal}`}
                           checked={newUserRoles.includes(terminal)}
-                          onCheckedChange={(checked) => toggleNewUserRole(terminal, !!checked)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setNewUserRoles([...newUserRoles, terminal]);
+                            } else {
+                              setNewUserRoles(newUserRoles.filter(r => r !== terminal));
+                            }
+                          }}
                         />
                         <label htmlFor={`new-terminal-${terminal}`} className="text-sm">
                           {terminalLabels[terminal]}
@@ -634,13 +597,9 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>操作</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => openEditRoles(user)}>
+                            <DropdownMenuItem onClick={() => openEditUser(user)}>
                               <Shield className="h-4 w-4 mr-2" />
-                              编辑终端
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEditDepartment(user)}>
-                              <Building2 className="h-4 w-4 mr-2" />
-                              编辑部门
+                              编辑用户
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
@@ -663,75 +622,64 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
         </CardContent>
       </Card>
 
-      {/* 编辑终端弹窗 */}
-      <Dialog open={editRolesDialogOpen} onOpenChange={setEditRolesDialogOpen}>
-        <DialogContent>
+      {/* 编辑用户弹窗 */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>编辑用户终端</DialogTitle>
+            <DialogTitle>编辑用户</DialogTitle>
             <DialogDescription>
               {editingUser?.email}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {['supplier', 'department', 'admin'].map(terminal => (
-              <div key={terminal} className="flex items-center space-x-3">
-                <Checkbox
-                  id={`edit-terminal-${terminal}`}
-                  checked={editRoles.includes(terminal)}
-                  onCheckedChange={(checked) => toggleRole(terminal, !!checked)}
-                />
-                <label htmlFor={`edit-terminal-${terminal}`} className="flex-1">
-                  <div className="font-medium">{terminalLabels[terminal]}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {terminal === 'supplier' && '可以管理自己的供应商信息、产品和资质'}
-                    {terminal === 'department' && '可以查看和管理本部门的供应商库'}
-                    {terminal === 'admin' && '拥有系统的完整管理权限'}
-                  </div>
-                </label>
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditRolesDialogOpen(false)}>取消</Button>
-            <Button onClick={handleUpdateRoles} disabled={saving}>
-              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              保存
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 编辑部门弹窗 */}
-      <Dialog open={editDeptDialogOpen} onOpenChange={setEditDeptDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>编辑用户部门</DialogTitle>
-            <DialogDescription>
-              {editingDeptUser?.email}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>所属部门</Label>
-              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择部门" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">无部门</SelectItem>
-                  {departments.map(dept => (
-                    <SelectItem key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>姓名</Label>
+              <Input
+                value={editUserName}
+                onChange={(e) => setEditUserName(e.target.value)}
+                placeholder="用户姓名"
+              />
             </div>
+            <div className="space-y-2">
+              <Label>终端</Label>
+              <div className="flex flex-wrap gap-4">
+                {['supplier', 'department', 'admin'].map(terminal => (
+                  <div key={terminal} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`edit-terminal-${terminal}`}
+                      checked={editUserRoles.includes(terminal)}
+                      onCheckedChange={(checked) => toggleEditUserRole(terminal, !!checked)}
+                    />
+                    <label htmlFor={`edit-terminal-${terminal}`} className="text-sm">
+                      {terminalLabels[terminal]}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {editUserRoles.includes('department') && (
+              <div className="space-y-2">
+                <Label>所属部门</Label>
+                <Select value={editUserDepartment} onValueChange={setEditUserDepartment}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择部门" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">无部门</SelectItem>
+                    {departments.map(dept => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDeptDialogOpen(false)}>取消</Button>
-            <Button onClick={handleUpdateDepartment} disabled={savingDept}>
-              {savingDept && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>取消</Button>
+            <Button onClick={handleUpdateUser} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               保存
             </Button>
           </DialogFooter>
