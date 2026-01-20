@@ -12,6 +12,7 @@ import SetupAdmin from "./pages/SetupAdmin";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminAudit from "./pages/admin/AdminAudit";
+import AdminSuppliers from "./pages/admin/AdminSuppliers";
 import SupplierRegister from "./pages/supplier/Register";
 import NotFound from "./pages/NotFound";
 
@@ -50,7 +51,7 @@ const App = () => (
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/audit" element={<AdminAudit />} />
-              <Route path="/admin/suppliers" element={<div className="p-4">供应商管理（开发中）</div>} />
+              <Route path="/admin/suppliers" element={<AdminSuppliers />} />
               <Route path="/admin/products" element={<div className="p-4">产品管理（开发中）</div>} />
               <Route path="/admin/reports" element={<div className="p-4">报表管理（开发中）</div>} />
               <Route path="/admin/announcements" element={<div className="p-4">公告管理（开发中）</div>} />
