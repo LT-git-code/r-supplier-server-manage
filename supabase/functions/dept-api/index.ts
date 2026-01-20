@@ -76,6 +76,77 @@ serve(async (req) => {
     console.log('Dept API action:', action, params);
 
     switch (action) {
+      case 'get_dashboard_stats': {
+        // 获取工作台统计数据
+        const [enabledRes, allSuppliersRes, productsRes] = await Promise.all([
+          supabaseAdmin
+            .from('department_suppliers')
+            .select('supplier_id, library_type')
+            .eq('library_type', 'current'),
+          supabaseAdmin
+            .from('suppliers')
+            .select('id', { count: 'exact' })
+            .eq('status', 'approved'),
+          supabaseAdmin
+            .from('products')
+            .select('id', { count: 'exact' })
+            .eq('is_active', true),
+        ]);
+
+        const enabledSupplierIds = new Set(enabledRes.data?.map(ds => ds.supplier_id) || []);
+        const enabledCount = enabledSupplierIds.size;
+        const totalApproved = allSuppliersRes.count || 0;
+        const availableCount = totalApproved - enabledCount;
+        const productCount = productsRes.count || 0;
+
+        return new Response(
+          JSON.stringify({
+            enabledSuppliers: enabledCount,
+            availableSuppliers: availableCount > 0 ? availableCount : 0,
+            totalProducts: productCount,
+            totalApprovedSuppliers: totalApproved,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_announcements': {
+        const { limit = 5 } = params;
+        const { data, error } = await supabaseAdmin
+          .from('announcements')
+          .select('id, title, content, published_at, created_at')
+          .eq('is_published', true)
+          .or('target_roles.is.null,target_roles.cs.{department}')
+          .order('published_at', { ascending: false })
+          .limit(limit);
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify(data),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_recent_enabled_suppliers': {
+        const { limit = 5 } = params;
+        const { data: recentEnabled, error } = await supabaseAdmin
+          .from('department_suppliers')
+          .select(`
+            id,
+            created_at,
+            supplier:suppliers(id, company_name, supplier_type, main_products)
+          `)
+          .eq('library_type', 'current')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify(recentEnabled),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       case 'get_dept_suppliers': {
         // 获取所有已批准的供应商
         const { data: allSuppliers, error: suppliersError } = await supabaseAdmin
