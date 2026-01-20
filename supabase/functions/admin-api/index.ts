@@ -25,22 +25,38 @@ serve(async (req) => {
       );
     }
 
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    // 使用 getClaims 验证 JWT token
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: authError } = await supabaseClient.auth.getClaims(token);
-    if (authError || !claimsData?.claims) {
-      console.error('认证失败:', authError);
+    // 解析 Bearer token
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (!match) {
       return new Response(
         JSON.stringify({ error: '认证失败' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    const user = { id: claimsData.claims.sub as string };
+    const token = match[1];
+
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+
+    // 优先使用 getClaims（签名密钥模式），失败时回退到 getUser(token)
+    let userId: string | null = null;
+
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    if (!claimsError && claimsData?.claims?.sub) {
+      userId = claimsData.claims.sub as string;
+    } else {
+      if (claimsError) console.error('getClaims 失败:', claimsError);
+      const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
+      if (userError || !userData?.user) {
+        if (userError) console.error('getUser(token) 失败:', userError);
+        return new Response(
+          JSON.stringify({ error: '认证失败' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      userId = userData.user.id;
+    }
+
+    const user = { id: userId };
 
     // 使用服务角色检查是否为管理员
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
