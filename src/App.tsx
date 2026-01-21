@@ -16,6 +16,7 @@ import AdminSuppliers from "./pages/admin/AdminSuppliers";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminQualificationAudit from "./pages/admin/AdminQualificationAudit";
 import AdminSettings from "./pages/admin/AdminSettings";
+import SeedTestData from "./pages/admin/SeedTestData";
 import SupplierRegister from "./pages/supplier/Register";
 import SupplierDashboard from "./pages/supplier/SupplierDashboard";
 import SupplierInfo from "./pages/supplier/SupplierInfo";
@@ -73,6 +74,7 @@ const App = () => (
               <Route path="/admin/announcements" element={<div className="p-4">公告管理（开发中）</div>} />
               <Route path="/admin/roles" element={<DeptRoles />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path="/admin/seed-data" element={<SeedTestData />} />
               
               {/* 个人设置 */}
               <Route path="/profile" element={<div className="p-4">个人设置（开发中）</div>} />
