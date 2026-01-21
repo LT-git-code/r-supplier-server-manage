@@ -53,7 +53,17 @@ serve(async (req) => {
     }
 
     // 检查是否是供应商
-    const { data: isSupplier } = await supabase.rpc("is_supplier", { _user_id: user.id });
+    const { data: isSupplier, error: roleError } = await supabase.rpc("is_supplier", { _user_id: user.id });
+    console.log("is_supplier check:", { userId: user.id, isSupplier, roleError });
+    
+    if (roleError) {
+      console.error("Role check error:", roleError);
+      return new Response(JSON.stringify({ error: "Failed to check role", code: roleError.code }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
     if (!isSupplier) {
       return new Response(JSON.stringify({ error: "Not a supplier" }), {
         status: 403,
@@ -62,12 +72,23 @@ serve(async (req) => {
     }
 
     const { action, ...params } = await req.json();
+    console.log("Action:", action, "Params:", params);
 
     // 获取供应商ID
-    const { data: supplierId } = await supabase.rpc("get_user_supplier_id", { _user_id: user.id });
+    const { data: supplierId, error: supplierIdError } = await supabase.rpc("get_user_supplier_id", { _user_id: user.id });
+    console.log("get_user_supplier_id result:", { supplierId, supplierIdError, type: typeof supplierId });
+
+    if (supplierIdError) {
+      console.error("Supplier ID fetch error:", supplierIdError);
+      return new Response(JSON.stringify({ error: "Failed to get supplier ID", code: supplierIdError.code }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // 如果供应商ID为空，说明用户还没有创建供应商记录
-    if (!supplierId) {
+    if (!supplierId || supplierId === "") {
+      console.log("No supplier record found for user:", user.id);
       return new Response(JSON.stringify({ error: "Supplier record not found. Please complete registration first.", code: "SUPPLIER_NOT_FOUND" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
