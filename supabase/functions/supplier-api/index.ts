@@ -66,6 +66,14 @@ serve(async (req) => {
     // 获取供应商ID
     const { data: supplierId } = await supabase.rpc("get_user_supplier_id", { _user_id: user.id });
 
+    // 如果供应商ID为空，说明用户还没有创建供应商记录
+    if (!supplierId) {
+      return new Response(JSON.stringify({ error: "Supplier record not found. Please complete registration first.", code: "SUPPLIER_NOT_FOUND" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     switch (action) {
       case "get_dashboard_stats": {
         // 获取工作台统计数据
