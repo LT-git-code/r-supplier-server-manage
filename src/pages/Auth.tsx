@@ -98,12 +98,18 @@ export default function Auth() {
     // 存储选择的角色，供注册后自动分配
     if (selectedRole) {
       localStorage.setItem('pending_role', selectedRole);
+      
+      // 部门人员注册后需要分配默认菜单权限
+      if (selectedRole === 'department') {
+        localStorage.setItem('pending_dept_permissions', 'true');
+      }
     }
     
     const { error } = await signUp(email, password);
     
     if (error) {
       localStorage.removeItem('pending_role');
+      localStorage.removeItem('pending_dept_permissions');
       if (error.message.includes('User already registered')) {
         setError('该邮箱已被注册');
       } else {
