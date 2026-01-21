@@ -65,6 +65,9 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  ShieldOff,
+  Star,
+  StarOff,
 } from 'lucide-react';
 
 interface SupplierProfile {
@@ -107,6 +110,10 @@ interface Supplier {
   created_at: string;
   updated_at: string;
   profiles: SupplierProfile | null;
+  is_blacklisted: boolean;
+  is_recommended: boolean;
+  blacklisted_at: string | null;
+  blacklist_reason: string | null;
 }
 
 interface Statistics {
@@ -115,6 +122,8 @@ interface Statistics {
   pending: number;
   suspended: number;
   rejected: number;
+  blacklisted: number;
+  recommended: number;
   byType: {
     enterprise: number;
     overseas: number;
@@ -163,6 +172,8 @@ export default function AdminSuppliers() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [blacklistFilter, setBlacklistFilter] = useState('all');
+  const [recommendedFilter, setRecommendedFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 15;
@@ -186,6 +197,10 @@ export default function AdminSuppliers() {
   // 删除确认对话框
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  // 拉黑对话框
+  const [blacklistDialogOpen, setBlacklistDialogOpen] = useState(false);
+  const [blacklistReason, setBlacklistReason] = useState('');
+
   const fetchStatistics = async () => {
     try {
       const { data, error } = await supabase.functions.invoke('admin-suppliers', {
@@ -207,6 +222,8 @@ export default function AdminSuppliers() {
           search,
           status: statusFilter,
           type: typeFilter,
+          blacklistFilter,
+          recommendedFilter,
           page,
           pageSize,
         },
@@ -226,7 +243,7 @@ export default function AdminSuppliers() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, typeFilter, page, pageSize, toast]);
+  }, [search, statusFilter, typeFilter, blacklistFilter, recommendedFilter, page, pageSize, toast]);
 
   useEffect(() => {
     fetchSuppliers();
@@ -374,6 +391,120 @@ export default function AdminSuppliers() {
     }
   };
 
+  // 拉黑供应商
+  const handleBlacklist = async () => {
+    if (!selectedSupplier) return;
+
+    try {
+      setProcessing(true);
+      const { error } = await supabase.functions.invoke('admin-suppliers', {
+        body: { 
+          action: 'blacklist', 
+          supplierId: selectedSupplier.id,
+          reason: blacklistReason,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({ title: '已拉黑供应商' });
+      setBlacklistDialogOpen(false);
+      setBlacklistReason('');
+      setDetailOpen(false);
+      fetchSuppliers();
+      fetchStatistics();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '操作失败',
+        description: error.message,
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // 解除拉黑
+  const handleUnblacklist = async () => {
+    if (!selectedSupplier) return;
+
+    try {
+      setProcessing(true);
+      const { error } = await supabase.functions.invoke('admin-suppliers', {
+        body: { action: 'unblacklist', supplierId: selectedSupplier.id },
+      });
+
+      if (error) throw error;
+
+      toast({ title: '已解除拉黑' });
+      setDetailOpen(false);
+      fetchSuppliers();
+      fetchStatistics();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '操作失败',
+        description: error.message,
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // 推荐供应商
+  const handleRecommend = async () => {
+    if (!selectedSupplier) return;
+
+    try {
+      setProcessing(true);
+      const { error } = await supabase.functions.invoke('admin-suppliers', {
+        body: { action: 'recommend', supplierId: selectedSupplier.id },
+      });
+
+      if (error) throw error;
+
+      toast({ title: '已推荐供应商' });
+      setDetailOpen(false);
+      fetchSuppliers();
+      fetchStatistics();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '操作失败',
+        description: error.message,
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // 取消推荐
+  const handleUnrecommend = async () => {
+    if (!selectedSupplier) return;
+
+    try {
+      setProcessing(true);
+      const { error } = await supabase.functions.invoke('admin-suppliers', {
+        body: { action: 'unrecommend', supplierId: selectedSupplier.id },
+      });
+
+      if (error) throw error;
+
+      toast({ title: '已取消推荐' });
+      setDetailOpen(false);
+      fetchSuppliers();
+      fetchStatistics();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '操作失败',
+        description: error.message,
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const totalPages = Math.ceil(total / pageSize);
 
   return (
@@ -392,7 +523,7 @@ export default function AdminSuppliers() {
 
       {/* 统计卡片 */}
       {statistics && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -445,6 +576,32 @@ export default function AdminSuppliers() {
               </div>
             </CardContent>
           </Card>
+          <Card className="cursor-pointer hover:border-destructive/50 transition-colors" onClick={() => { setBlacklistFilter('blacklisted'); setPage(1); }}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-destructive/10 rounded-lg">
+                  <ShieldOff className="h-5 w-5 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">已拉黑</p>
+                  <p className="text-2xl font-bold">{statistics.blacklisted}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="cursor-pointer hover:border-amber-500/50 transition-colors" onClick={() => { setRecommendedFilter('recommended'); setPage(1); }}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 rounded-lg">
+                  <Star className="h-5 w-5 text-amber-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">推荐</p>
+                  <p className="text-2xl font-bold">{statistics.recommended}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -477,8 +634,8 @@ export default function AdminSuppliers() {
       {/* 筛选和搜索 */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
+          <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="搜索公司名称、联系人、统一信用代码..."
@@ -510,6 +667,26 @@ export default function AdminSuppliers() {
                 <SelectItem value="individual">个人</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={blacklistFilter} onValueChange={(v) => { setBlacklistFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="拉黑状态" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                <SelectItem value="blacklisted">已拉黑</SelectItem>
+                <SelectItem value="normal">正常</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={recommendedFilter} onValueChange={(v) => { setRecommendedFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="推荐状态" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                <SelectItem value="recommended">推荐</SelectItem>
+                <SelectItem value="normal">普通</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -534,6 +711,7 @@ export default function AdminSuppliers() {
                     <TableRow>
                       <TableHead>供应商名称</TableHead>
                       <TableHead>类型</TableHead>
+                      <TableHead>标签</TableHead>
                       <TableHead>联系人</TableHead>
                       <TableHead>联系方式</TableHead>
                       <TableHead>地区</TableHead>
@@ -546,13 +724,16 @@ export default function AdminSuppliers() {
                     {suppliers.map(supplier => {
                       const TypeIcon = typeIcons[supplier.supplier_type];
                       return (
-                        <TableRow key={supplier.id}>
+                        <TableRow key={supplier.id} className={supplier.is_blacklisted ? 'bg-destructive/5' : ''}>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <TypeIcon className="h-4 w-4 text-muted-foreground" />
                               <div>
-                                <div className="font-medium">
+                                <div className="font-medium flex items-center gap-1">
                                   {supplier.company_name || supplier.contact_name || '未填写'}
+                                  {supplier.is_recommended && (
+                                    <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                                  )}
                                 </div>
                                 {supplier.unified_social_credit_code && (
                                   <div className="text-xs text-muted-foreground">
@@ -564,6 +745,25 @@ export default function AdminSuppliers() {
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{typeLabels[supplier.supplier_type]}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1 flex-wrap">
+                              {supplier.is_blacklisted && (
+                                <Badge variant="destructive" className="gap-1">
+                                  <ShieldOff className="h-3 w-3" />
+                                  拉黑
+                                </Badge>
+                              )}
+                              {supplier.is_recommended && (
+                                <Badge className="gap-1 bg-amber-500 hover:bg-amber-600">
+                                  <Star className="h-3 w-3" />
+                                  推荐
+                                </Badge>
+                              )}
+                              {!supplier.is_blacklisted && !supplier.is_recommended && (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>{supplier.contact_name || '-'}</TableCell>
                           <TableCell>
@@ -661,59 +861,130 @@ export default function AdminSuppliers() {
             </div>
           ) : selectedSupplier && (
             <div className="mt-6 space-y-6">
-              {/* 状态和操作按钮 */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              {/* 状态和标签 */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="outline" className={statusColors[selectedSupplier.status]}>
                     {statusLabels[selectedSupplier.status]}
                   </Badge>
                   <Badge variant="outline">{typeLabels[selectedSupplier.supplier_type]}</Badge>
+                  {selectedSupplier.is_blacklisted && (
+                    <Badge variant="destructive" className="gap-1">
+                      <ShieldOff className="h-3 w-3" />
+                      已拉黑
+                    </Badge>
+                  )}
+                  {selectedSupplier.is_recommended && (
+                    <Badge className="gap-1 bg-amber-500 hover:bg-amber-600">
+                      <Star className="h-3 w-3" />
+                      推荐
+                    </Badge>
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  {selectedSupplier.status === 'approved' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setStatusAction('suspend');
-                        setStatusDialogOpen(true);
-                      }}
-                    >
-                      <Ban className="h-4 w-4 mr-1" />
-                      暂停
-                    </Button>
-                  )}
-                  {selectedSupplier.status === 'suspended' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setStatusAction('restore');
-                        setStatusDialogOpen(true);
-                      }}
-                    >
-                      <RotateCcw className="h-4 w-4 mr-1" />
-                      恢复
-                    </Button>
-                  )}
+              </div>
+
+              {/* 操作按钮 */}
+              <div className="flex flex-wrap gap-2">
+                {/* 拉黑/解除拉黑 */}
+                {!selectedSupplier.is_blacklisted ? (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleEdit(selectedSupplier)}
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setBlacklistDialogOpen(true)}
                   >
-                    <Edit className="h-4 w-4 mr-1" />
-                    编辑
+                    <ShieldOff className="h-4 w-4 mr-1" />
+                    拉黑
                   </Button>
+                ) : (
                   <Button
-                    variant="destructive"
+                    variant="outline"
                     size="sm"
-                    onClick={() => setDeleteDialogOpen(true)}
+                    onClick={handleUnblacklist}
+                    disabled={processing}
                   >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    删除
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                    解除拉黑
                   </Button>
-                </div>
+                )}
+                
+                {/* 推荐/取消推荐 */}
+                {!selectedSupplier.is_recommended ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-amber-600 hover:text-amber-700"
+                    onClick={handleRecommend}
+                    disabled={processing || selectedSupplier.is_blacklisted}
+                  >
+                    <Star className="h-4 w-4 mr-1" />
+                    推荐
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUnrecommend}
+                    disabled={processing}
+                  >
+                    <StarOff className="h-4 w-4 mr-1" />
+                    取消推荐
+                  </Button>
+                )}
+
+                {/* 暂停/恢复 */}
+                {selectedSupplier.status === 'approved' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setStatusAction('suspend');
+                      setStatusDialogOpen(true);
+                    }}
+                  >
+                    <Ban className="h-4 w-4 mr-1" />
+                    暂停
+                  </Button>
+                )}
+                {selectedSupplier.status === 'suspended' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setStatusAction('restore');
+                      setStatusDialogOpen(true);
+                    }}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                    恢复
+                  </Button>
+                )}
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEdit(selectedSupplier)}
+                >
+                  <Edit className="h-4 w-4 mr-1" />
+                  编辑
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  删除
+                </Button>
               </div>
+
+              {/* 拉黑原因 */}
+              {selectedSupplier.is_blacklisted && selectedSupplier.blacklist_reason && (
+                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                  <p className="text-sm font-medium text-destructive">拉黑原因：</p>
+                  <p className="text-sm text-muted-foreground mt-1">{selectedSupplier.blacklist_reason}</p>
+                </div>
+              )}
 
               {/* 暂停原因 */}
               {selectedSupplier.rejection_reason && selectedSupplier.status === 'suspended' && (
@@ -1170,6 +1441,42 @@ export default function AdminSuppliers() {
             <Button variant="destructive" onClick={handleDelete} disabled={processing}>
               {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               确认删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 拉黑对话框 */}
+      <Dialog open={blacklistDialogOpen} onOpenChange={setBlacklistDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>拉黑供应商</DialogTitle>
+            <DialogDescription>
+              拉黑后该供应商账号将无法登录系统，并会出现在拉黑名单中。
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-2">
+            <Label>拉黑原因 *</Label>
+            <Textarea
+              value={blacklistReason}
+              onChange={(e) => setBlacklistReason(e.target.value)}
+              placeholder="请输入拉黑原因..."
+              rows={3}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBlacklistDialogOpen(false)}>
+              取消
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={handleBlacklist} 
+              disabled={processing || !blacklistReason.trim()}
+            >
+              {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              确认拉黑
             </Button>
           </DialogFooter>
         </DialogContent>

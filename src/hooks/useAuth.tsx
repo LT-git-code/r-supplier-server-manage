@@ -189,11 +189,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) throw error;
+
+      // 检查供应商是否被拉黑
+      if (data.user) {
+        const { data: blacklistData } = await supabase.functions.invoke('admin-suppliers', {
+          body: { action: 'check_blacklist', userId: data.user.id },
+        });
+
+        if (blacklistData?.isBlacklisted) {
+          await supabase.auth.signOut();
+          throw new Error(`账号已被拉黑：${blacklistData.reason || '请联系管理员'}`);
+        }
+      }
+
       return { error: null };
     } catch (error) {
       return { error: error as Error };

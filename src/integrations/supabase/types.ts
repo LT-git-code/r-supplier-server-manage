@@ -805,6 +805,9 @@ export type Database = {
           bank_account: string | null
           bank_account_name: string | null
           bank_name: string | null
+          blacklist_reason: string | null
+          blacklisted_at: string | null
+          blacklisted_by: string | null
           business_license_url: string | null
           business_scope: string | null
           city: string | null
@@ -820,10 +823,14 @@ export type Database = {
           id_card_back_url: string | null
           id_card_front_url: string | null
           id_card_number: string | null
+          is_blacklisted: boolean
+          is_recommended: boolean
           legal_representative: string | null
           main_products: string | null
           production_capacity: string | null
           province: string | null
+          recommended_at: string | null
+          recommended_by: string | null
           registered_capital: number | null
           registration_number: string | null
           rejection_reason: string | null
@@ -841,6 +848,9 @@ export type Database = {
           bank_account?: string | null
           bank_account_name?: string | null
           bank_name?: string | null
+          blacklist_reason?: string | null
+          blacklisted_at?: string | null
+          blacklisted_by?: string | null
           business_license_url?: string | null
           business_scope?: string | null
           city?: string | null
@@ -856,10 +866,14 @@ export type Database = {
           id_card_back_url?: string | null
           id_card_front_url?: string | null
           id_card_number?: string | null
+          is_blacklisted?: boolean
+          is_recommended?: boolean
           legal_representative?: string | null
           main_products?: string | null
           production_capacity?: string | null
           province?: string | null
+          recommended_at?: string | null
+          recommended_by?: string | null
           registered_capital?: number | null
           registration_number?: string | null
           rejection_reason?: string | null
@@ -877,6 +891,9 @@ export type Database = {
           bank_account?: string | null
           bank_account_name?: string | null
           bank_name?: string | null
+          blacklist_reason?: string | null
+          blacklisted_at?: string | null
+          blacklisted_by?: string | null
           business_license_url?: string | null
           business_scope?: string | null
           city?: string | null
@@ -892,10 +909,14 @@ export type Database = {
           id_card_back_url?: string | null
           id_card_front_url?: string | null
           id_card_number?: string | null
+          is_blacklisted?: boolean
+          is_recommended?: boolean
           legal_representative?: string | null
           main_products?: string | null
           production_capacity?: string | null
           province?: string | null
+          recommended_at?: string | null
+          recommended_by?: string | null
           registered_capital?: number | null
           registration_number?: string | null
           rejection_reason?: string | null

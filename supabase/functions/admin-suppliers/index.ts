@@ -62,6 +62,8 @@ serve(async (req) => {
           search = '', 
           status = 'all', 
           type = 'all',
+          blacklistFilter = 'all',
+          recommendedFilter = 'all',
           page = 1, 
           pageSize = 20 
         } = params;
@@ -69,6 +71,8 @@ serve(async (req) => {
         let query = supabaseAdmin
           .from('suppliers')
           .select('*', { count: 'exact' })
+          // 推荐供应商优先排序
+          .order('is_recommended', { ascending: false })
           .order('created_at', { ascending: false });
 
         // 状态筛选
@@ -79,6 +83,20 @@ serve(async (req) => {
         // 类型筛选
         if (type !== 'all') {
           query = query.eq('supplier_type', type);
+        }
+
+        // 拉黑筛选
+        if (blacklistFilter === 'blacklisted') {
+          query = query.eq('is_blacklisted', true);
+        } else if (blacklistFilter === 'normal') {
+          query = query.eq('is_blacklisted', false);
+        }
+
+        // 推荐筛选
+        if (recommendedFilter === 'recommended') {
+          query = query.eq('is_recommended', true);
+        } else if (recommendedFilter === 'normal') {
+          query = query.eq('is_recommended', false);
         }
 
         // 搜索 - 支持公司名称、联系人、统一社会信用代码
@@ -345,7 +363,7 @@ serve(async (req) => {
         // 获取供应商统计数据
         const { data: suppliers } = await supabaseAdmin
           .from('suppliers')
-          .select('id, status, supplier_type');
+          .select('id, status, supplier_type, is_blacklisted, is_recommended');
 
         const stats = {
           total: suppliers?.length || 0,
@@ -353,6 +371,8 @@ serve(async (req) => {
           pending: suppliers?.filter(s => s.status === 'pending').length || 0,
           suspended: suppliers?.filter(s => s.status === 'suspended').length || 0,
           rejected: suppliers?.filter(s => s.status === 'rejected').length || 0,
+          blacklisted: suppliers?.filter(s => s.is_blacklisted).length || 0,
+          recommended: suppliers?.filter(s => s.is_recommended).length || 0,
           byType: {
             enterprise: suppliers?.filter(s => s.supplier_type === 'enterprise').length || 0,
             overseas: suppliers?.filter(s => s.supplier_type === 'overseas').length || 0,
@@ -362,6 +382,182 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify(stats),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'blacklist': {
+        const { supplierId, reason } = params;
+        
+        if (!supplierId) {
+          return new Response(
+            JSON.stringify({ error: '缺少供应商ID' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateError } = await supabaseAdmin
+          .from('suppliers')
+          .update({
+            is_blacklisted: true,
+            blacklisted_at: new Date().toISOString(),
+            blacklisted_by: user.id,
+            blacklist_reason: reason || '账户已被拉黑',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', supplierId);
+
+        if (updateError) throw updateError;
+
+        // 记录操作日志
+        await supabaseAdmin.from('operation_logs').insert({
+          user_id: user.id,
+          action: 'blacklist_supplier',
+          target_type: 'supplier',
+          target_id: supplierId,
+          new_data: { is_blacklisted: true, reason },
+        });
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'unblacklist': {
+        const { supplierId } = params;
+        
+        if (!supplierId) {
+          return new Response(
+            JSON.stringify({ error: '缺少供应商ID' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateError } = await supabaseAdmin
+          .from('suppliers')
+          .update({
+            is_blacklisted: false,
+            blacklisted_at: null,
+            blacklisted_by: null,
+            blacklist_reason: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', supplierId);
+
+        if (updateError) throw updateError;
+
+        // 记录操作日志
+        await supabaseAdmin.from('operation_logs').insert({
+          user_id: user.id,
+          action: 'unblacklist_supplier',
+          target_type: 'supplier',
+          target_id: supplierId,
+          new_data: { is_blacklisted: false },
+        });
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'recommend': {
+        const { supplierId } = params;
+        
+        if (!supplierId) {
+          return new Response(
+            JSON.stringify({ error: '缺少供应商ID' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateError } = await supabaseAdmin
+          .from('suppliers')
+          .update({
+            is_recommended: true,
+            recommended_at: new Date().toISOString(),
+            recommended_by: user.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', supplierId);
+
+        if (updateError) throw updateError;
+
+        // 记录操作日志
+        await supabaseAdmin.from('operation_logs').insert({
+          user_id: user.id,
+          action: 'recommend_supplier',
+          target_type: 'supplier',
+          target_id: supplierId,
+          new_data: { is_recommended: true },
+        });
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'unrecommend': {
+        const { supplierId } = params;
+        
+        if (!supplierId) {
+          return new Response(
+            JSON.stringify({ error: '缺少供应商ID' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateError } = await supabaseAdmin
+          .from('suppliers')
+          .update({
+            is_recommended: false,
+            recommended_at: null,
+            recommended_by: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', supplierId);
+
+        if (updateError) throw updateError;
+
+        // 记录操作日志
+        await supabaseAdmin.from('operation_logs').insert({
+          user_id: user.id,
+          action: 'unrecommend_supplier',
+          target_type: 'supplier',
+          target_id: supplierId,
+          new_data: { is_recommended: false },
+        });
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'check_blacklist': {
+        // 供应商登录时检查是否被拉黑
+        const { userId } = params;
+        
+        if (!userId) {
+          return new Response(
+            JSON.stringify({ error: '缺少用户ID' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { data: supplier } = await supabaseAdmin
+          .from('suppliers')
+          .select('id, is_blacklisted, blacklist_reason')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        return new Response(
+          JSON.stringify({ 
+            isBlacklisted: supplier?.is_blacklisted || false,
+            reason: supplier?.blacklist_reason || null
+          }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
