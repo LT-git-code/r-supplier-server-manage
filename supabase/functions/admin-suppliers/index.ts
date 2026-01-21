@@ -38,7 +38,36 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
-    // 验证管理员权限
+    const { action, ...params } = await req.json();
+    console.log('Supplier management action:', action, params);
+
+    // check_blacklist 操作允许任何已认证用户调用（用于登录时检查黑名单）
+    if (action === 'check_blacklist') {
+      const { userId } = params;
+      
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ error: '缺少用户ID' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: supplier } = await supabaseAdmin
+        .from('suppliers')
+        .select('id, is_blacklisted, blacklist_reason')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      return new Response(
+        JSON.stringify({ 
+          isBlacklisted: supplier?.is_blacklisted || false,
+          reason: supplier?.blacklist_reason || null
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 其他操作需要验证管理员权限
     const { data: adminRole } = await supabaseAdmin
       .from('user_roles')
       .select('role')
@@ -52,8 +81,6 @@ serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    const { action, ...params } = await req.json();
     console.log('Supplier management action:', action, params);
 
     switch (action) {
@@ -532,32 +559,6 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      case 'check_blacklist': {
-        // 供应商登录时检查是否被拉黑
-        const { userId } = params;
-        
-        if (!userId) {
-          return new Response(
-            JSON.stringify({ error: '缺少用户ID' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        const { data: supplier } = await supabaseAdmin
-          .from('suppliers')
-          .select('id, is_blacklisted, blacklist_reason')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        return new Response(
-          JSON.stringify({ 
-            isBlacklisted: supplier?.is_blacklisted || false,
-            reason: supplier?.blacklist_reason || null
-          }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
