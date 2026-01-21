@@ -38,6 +38,95 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+    const { action, ...params } = await req.json();
+    console.log('Dept API action:', action, params);
+
+    // 部门注册时分配默认权限，不需要验证部门角色
+    if (action === 'assign_default_permissions') {
+      const { userId } = params;
+      
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ error: '缺少用户ID' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      try {
+        // 创建或获取默认部门角色
+        let defaultRoleId: string | null = null;
+        
+        const { data: existingRole } = await supabaseAdmin
+          .from('backend_roles')
+          .select('id')
+          .eq('code', 'dept_default')
+          .maybeSingle();
+
+        if (existingRole) {
+          defaultRoleId = existingRole.id;
+        } else {
+          // 创建默认部门角色
+          const { data: newRole, error: roleError } = await supabaseAdmin
+            .from('backend_roles')
+            .insert({
+              code: 'dept_default',
+              name: '部门默认角色',
+              description: '部门人员注册后的默认角色',
+              is_active: true,
+            })
+            .select('id')
+            .single();
+
+          if (roleError) throw roleError;
+          defaultRoleId = newRole.id;
+
+          // 获取供应商管理和产品管理菜单ID
+          const { data: menus } = await supabaseAdmin
+            .from('menu_permissions')
+            .select('id')
+            .eq('terminal', 'department')
+            .in('menu_key', ['dept_suppliers', 'dept_products', 'dept_dashboard']);
+
+          // 为默认角色分配菜单权限
+          if (menus && menus.length > 0) {
+            const roleMenus = menus.map(m => ({
+              role_id: defaultRoleId!,
+              menu_id: m.id,
+            }));
+            await supabaseAdmin.from('role_menu_permissions').insert(roleMenus);
+          }
+        }
+
+        // 将用户分配到默认角色
+        if (defaultRoleId) {
+          const { data: existingUserRole } = await supabaseAdmin
+            .from('user_backend_roles')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('role_id', defaultRoleId)
+            .maybeSingle();
+
+          if (!existingUserRole) {
+            await supabaseAdmin
+              .from('user_backend_roles')
+              .insert({ user_id: userId, role_id: defaultRoleId });
+          }
+        }
+
+        console.log('Assigned default permissions to user:', userId);
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (e) {
+        console.error('Error assigning default permissions:', e);
+        return new Response(
+          JSON.stringify({ error: '分配权限失败' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // 验证用户是部门用户
     const { data: deptRole } = await supabaseAdmin
       .from('user_roles')
@@ -71,9 +160,6 @@ serve(async (req) => {
         .single();
       primaryDeptId = defaultDept?.id;
     }
-
-    const { action, ...params } = await req.json();
-    console.log('Dept API action:', action, params);
 
     switch (action) {
       case 'get_dashboard_stats': {
