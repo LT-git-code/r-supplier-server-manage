@@ -306,6 +306,164 @@ serve(async (req) => {
         );
       }
 
+      case 'get_projects': {
+        const { data: projects, error } = await supabaseAdmin
+          .from('projects')
+          .select(`
+            *,
+            department:departments(id, name),
+            project_suppliers(
+              id,
+              contract_amount,
+              supplier:suppliers(id, company_name, supplier_type)
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ projects: projects || [] }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'create_project': {
+        const { name, code, description, status, start_date, end_date, budget, supplier_ids } = params;
+        
+        const { data: project, error: projectError } = await supabaseAdmin
+          .from('projects')
+          .insert({
+            name,
+            code,
+            description,
+            status: status || 'active',
+            start_date,
+            end_date,
+            budget,
+            department_id: primaryDeptId,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (projectError) throw projectError;
+
+        // 添加供应商关联
+        if (supplier_ids && supplier_ids.length > 0) {
+          const projectSuppliers = supplier_ids.map((sid: string) => ({
+            project_id: project.id,
+            supplier_id: sid,
+          }));
+          await supabaseAdmin.from('project_suppliers').insert(projectSuppliers);
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, project }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'update_project': {
+        const { projectId, ...updateData } = params;
+        const { supplier_ids, ...projectData } = updateData;
+
+        const { error } = await supabaseAdmin
+          .from('projects')
+          .update(projectData)
+          .eq('id', projectId);
+
+        if (error) throw error;
+
+        // 更新供应商关联
+        if (supplier_ids !== undefined) {
+          await supabaseAdmin.from('project_suppliers').delete().eq('project_id', projectId);
+          if (supplier_ids.length > 0) {
+            const projectSuppliers = supplier_ids.map((sid: string) => ({
+              project_id: projectId,
+              supplier_id: sid,
+            }));
+            await supabaseAdmin.from('project_suppliers').insert(projectSuppliers);
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'delete_project': {
+        const { projectId } = params;
+        const { error } = await supabaseAdmin.from('projects').delete().eq('id', projectId);
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_services': {
+        // 获取启用供应商的服务
+        const { data: enabledSuppliers } = await supabaseAdmin
+          .from('department_suppliers')
+          .select('supplier_id')
+          .eq('library_type', 'current');
+        
+        const supplierIds = enabledSuppliers?.map(s => s.supplier_id) || [];
+        
+        if (supplierIds.length === 0) {
+          return new Response(
+            JSON.stringify({ services: [] }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { data: services, error } = await supabaseAdmin
+          .from('services')
+          .select(`
+            *,
+            supplier:suppliers(id, company_name, supplier_type, contact_name, contact_phone)
+          `)
+          .in('supplier_id', supplierIds)
+          .eq('is_active', true)
+          .order('name');
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ services: services || [] }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_enabled_suppliers': {
+        // 获取启用的供应商列表（用于项目选择）
+        const { data: enabledSuppliers } = await supabaseAdmin
+          .from('department_suppliers')
+          .select('supplier_id')
+          .eq('library_type', 'current');
+        
+        const supplierIds = enabledSuppliers?.map(s => s.supplier_id) || [];
+        
+        if (supplierIds.length === 0) {
+          return new Response(
+            JSON.stringify({ suppliers: [] }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { data: suppliers, error } = await supabaseAdmin
+          .from('suppliers')
+          .select('id, company_name, supplier_type')
+          .in('id', supplierIds)
+          .order('company_name');
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ suppliers: suppliers || [] }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: '未知操作' }),
