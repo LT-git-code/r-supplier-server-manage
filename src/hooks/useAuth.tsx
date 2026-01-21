@@ -99,7 +99,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (existingRoles && existingRoles.length > 0) {
         // 用户已有角色，清除pending
         localStorage.removeItem('pending_role');
-        localStorage.removeItem('pending_dept_permissions');
         return;
       }
 
@@ -110,19 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!error) {
         console.log('Auto-assigned role:', pendingRole);
-        
-        // 部门人员注册后分配默认菜单权限（供应商管理和产品管理）
-        if (pendingRole === 'department' && localStorage.getItem('pending_dept_permissions')) {
-          try {
-            // 调用边缘函数分配默认权限
-            await supabase.functions.invoke('dept-api', {
-              body: { action: 'assign_default_permissions', userId },
-            });
-            console.log('Assigned default department permissions');
-          } catch (permError) {
-            console.error('Failed to assign department permissions:', permError);
-          }
-        }
       } else {
         console.error('Failed to assign role:', error);
       }
@@ -130,7 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error assigning pending role:', e);
     } finally {
       localStorage.removeItem('pending_role');
-      localStorage.removeItem('pending_dept_permissions');
     }
   }, []);
 
@@ -204,11 +189,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) throw error;
+
+      // 检查供应商是否被拉黑
+      if (data.user) {
+        const { data: blacklistData } = await supabase.functions.invoke('admin-suppliers', {
+          body: { action: 'check_blacklist', userId: data.user.id },
+        });
+
+        if (blacklistData?.isBlacklisted) {
+          await supabase.auth.signOut();
+          throw new Error(`账号已被拉黑：${blacklistData.reason || '请联系管理员'}`);
+        }
+      }
+
       return { error: null };
     } catch (error) {
       return { error: error as Error };

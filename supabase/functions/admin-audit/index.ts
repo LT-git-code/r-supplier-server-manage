@@ -156,20 +156,6 @@ serve(async (req) => {
       case 'approve': {
         const { supplierId } = params;
         
-        // 获取供应商信息
-        const { data: supplier } = await supabaseAdmin
-          .from('suppliers')
-          .select('user_id')
-          .eq('id', supplierId)
-          .single();
-
-        if (!supplier) {
-          return new Response(
-            JSON.stringify({ error: '供应商不存在' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
         // 更新供应商状态
         const { error: updateError } = await supabaseAdmin
           .from('suppliers')
@@ -184,84 +170,26 @@ serve(async (req) => {
         if (updateError) throw updateError;
 
         // 给用户分配供应商角色
-        const { data: existingRole } = await supabaseAdmin
-          .from('user_roles')
-          .select('id')
-          .eq('user_id', supplier.user_id)
-          .eq('role', 'supplier')
-          .maybeSingle();
+        const { data: supplier } = await supabaseAdmin
+          .from('suppliers')
+          .select('user_id')
+          .eq('id', supplierId)
+          .single();
 
-        if (!existingRole) {
-          await supabaseAdmin
+        if (supplier) {
+          // 检查是否已有角色
+          const { data: existingRole } = await supabaseAdmin
             .from('user_roles')
-            .insert({ user_id: supplier.user_id, role: 'supplier' });
-        }
-
-        // 分配供应商终端的所有菜单权限
-        try {
-          // 创建或获取供应商默认角色
-          let supplierRoleId: string | null = null;
-          
-          const { data: existingSupplierRole } = await supabaseAdmin
-            .from('backend_roles')
             .select('id')
-            .eq('code', 'supplier_default')
+            .eq('user_id', supplier.user_id)
+            .eq('role', 'supplier')
             .maybeSingle();
 
-          if (existingSupplierRole) {
-            supplierRoleId = existingSupplierRole.id;
-          } else {
-            // 创建默认供应商角色
-            const { data: newRole, error: roleError } = await supabaseAdmin
-              .from('backend_roles')
-              .insert({
-                code: 'supplier_default',
-                name: '供应商默认角色',
-                description: '供应商审核通过后的默认角色，拥有所有供应商终端权限',
-                is_active: true,
-              })
-              .select('id')
-              .single();
-
-            if (roleError) throw roleError;
-            supplierRoleId = newRole.id;
-
-            // 获取所有供应商终端菜单
-            const { data: supplierMenus } = await supabaseAdmin
-              .from('menu_permissions')
-              .select('id')
-              .eq('terminal', 'supplier')
-              .eq('is_active', true);
-
-            // 为供应商默认角色分配所有菜单权限
-            if (supplierMenus && supplierMenus.length > 0) {
-              const roleMenus = supplierMenus.map(m => ({
-                role_id: supplierRoleId!,
-                menu_id: m.id,
-              }));
-              await supabaseAdmin.from('role_menu_permissions').insert(roleMenus);
-            }
+          if (!existingRole) {
+            await supabaseAdmin
+              .from('user_roles')
+              .insert({ user_id: supplier.user_id, role: 'supplier' });
           }
-
-          // 将用户分配到供应商默认角色
-          if (supplierRoleId) {
-            const { data: existingUserRole } = await supabaseAdmin
-              .from('user_backend_roles')
-              .select('id')
-              .eq('user_id', supplier.user_id)
-              .eq('role_id', supplierRoleId)
-              .maybeSingle();
-
-            if (!existingUserRole) {
-              await supabaseAdmin
-                .from('user_backend_roles')
-                .insert({ user_id: supplier.user_id, role_id: supplierRoleId });
-            }
-          }
-          
-          console.log('Assigned supplier default permissions to user:', supplier.user_id);
-        } catch (permError) {
-          console.error('Error assigning supplier permissions:', permError);
         }
 
         // 记录审核日志
@@ -270,7 +198,7 @@ serve(async (req) => {
           target_id: supplierId,
           target_table: 'suppliers',
           status: 'approved',
-          submitted_by: supplier.user_id,
+          submitted_by: supplier?.user_id,
           reviewed_by: user.id,
           reviewed_at: new Date().toISOString(),
         });
