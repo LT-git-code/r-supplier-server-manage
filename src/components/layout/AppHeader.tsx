@@ -25,9 +25,9 @@ interface AppHeaderProps {
 }
 
 const roleLabels: Record<AppRole, string> = {
-  supplier: '供应商',
-  department: '部门人员',
-  admin: '管理员',
+  supplier: '供应商端',
+  department: '青山部门端',
+  admin: '效率委总管理端',
 };
 
 const roleColors: Record<AppRole, string> = {
