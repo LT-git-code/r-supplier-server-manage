@@ -429,9 +429,9 @@ export default function AdminReports() {
   };
 
   const filteredSuppliers = allSuppliers.filter(s =>
-    s.company_name.includes(supplierSearch) ||
-    s.unified_social_credit_code?.includes(supplierSearch) ||
-    s.contact_name?.includes(supplierSearch)
+    (s.company_name || '').includes(supplierSearch) ||
+    (s.unified_social_credit_code || '').includes(supplierSearch) ||
+    (s.contact_name || '').includes(supplierSearch)
   );
 
   if (loading) {
