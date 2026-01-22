@@ -77,9 +77,9 @@ interface Department {
 }
 
 const terminalLabels: Record<string, string> = {
-  supplier: '供应商',
-  department: '部门',
-  admin: '管理员',
+  supplier: '供应商端',
+  department: '青山部门端',
+  admin: '效率委总管理端',
 };
 
 const terminalColors: Record<string, string> = {
@@ -470,7 +470,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">管理员</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">效率委总管理端</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -480,7 +480,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">部门人员</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">青山部门端</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -490,7 +490,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">供应商</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">供应商端</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -519,9 +519,9 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部终端</SelectItem>
-                <SelectItem value="admin">管理员</SelectItem>
-                <SelectItem value="department">部门</SelectItem>
-                <SelectItem value="supplier">供应商</SelectItem>
+                <SelectItem value="admin">效率委总管理端</SelectItem>
+                <SelectItem value="department">青山部门端</SelectItem>
+                <SelectItem value="supplier">供应商端</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline" size="icon" onClick={fetchData}>
