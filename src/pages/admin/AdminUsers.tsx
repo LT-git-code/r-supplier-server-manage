@@ -61,7 +61,7 @@ interface UserData {
     full_name: string | null;
     phone: string | null;
   } | null;
-  roles: string[];
+  roles: string[] | null;
   departments: {
     id: string;
     name: string;
@@ -303,10 +303,11 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (user.profile?.full_name || '').toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesRole = roleFilter === 'all' || user.roles.includes(roleFilter);
+    const userRoles = user.roles || [];
+    const matchesRole = roleFilter === 'all' || userRoles.includes(roleFilter);
     
     // 根据终端过滤：如果选择了特定终端，只显示包含该终端角色的用户
-    const matchesTerminal = terminalFilter === 'all' || user.roles.includes(terminalFilter);
+    const matchesTerminal = terminalFilter === 'all' || userRoles.includes(terminalFilter);
     
     return matchesSearch && matchesRole && matchesTerminal;
   });
@@ -322,7 +323,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
   // 根据终端过滤后的用户列表（用于统计）
   const terminalFilteredUsers = terminalFilter === 'all' 
     ? users 
-    : users.filter(u => u.roles.includes(terminalFilter));
+    : users.filter(u => (u.roles || []).includes(terminalFilter));
 
   return (
     <div className="space-y-6">
@@ -498,7 +499,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {terminalFilteredUsers.filter(u => u.roles.includes('admin')).length}
+              {terminalFilteredUsers.filter(u => (u.roles || []).includes('admin')).length}
             </div>
           </CardContent>
         </Card>
@@ -508,7 +509,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {terminalFilteredUsers.filter(u => u.roles.includes('department')).length}
+              {terminalFilteredUsers.filter(u => (u.roles || []).includes('department')).length}
             </div>
           </CardContent>
         </Card>
@@ -518,7 +519,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {terminalFilteredUsers.filter(u => u.roles.includes('supplier')).length}
+              {terminalFilteredUsers.filter(u => (u.roles || []).includes('supplier')).length}
             </div>
           </CardContent>
         </Card>
@@ -584,7 +585,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          {user.roles.length === 0 ? (
+                          {(!user.roles || user.roles.length === 0) ? (
                             <Badge variant="outline" className="text-muted-foreground">无终端</Badge>
                           ) : (
                             user.roles.map(terminal => (
