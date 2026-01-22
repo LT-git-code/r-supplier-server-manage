@@ -529,6 +529,235 @@ serve(async (req) => {
         );
       }
 
+      // ========== 项目管理 ==========
+      case 'get_projects': {
+        const { data: projects, error } = await supabaseAdmin
+          .from('projects')
+          .select(`
+            *,
+            departments (id, name),
+            project_suppliers (
+              id,
+              contract_amount,
+              suppliers (id, company_name, supplier_type)
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const formattedProjects = projects?.map(p => ({
+          ...p,
+          department: p.departments,
+          project_suppliers: p.project_suppliers?.map((ps: any) => ({
+            id: ps.id,
+            contract_amount: ps.contract_amount,
+            supplier: ps.suppliers,
+          })) || [],
+          departments: undefined,
+        })) || [];
+
+        return new Response(
+          JSON.stringify({ projects: formattedProjects }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_approved_suppliers': {
+        const { data: suppliers, error } = await supabaseAdmin
+          .from('suppliers')
+          .select('id, company_name, supplier_type')
+          .eq('status', 'approved')
+          .eq('is_blacklisted', false)
+          .order('company_name');
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ suppliers: suppliers || [] }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'create_project': {
+        const { name, code, description, status: projectStatus, start_date, end_date, budget, department_id, supplier_ids } = params;
+
+        const { data: project, error: createError } = await supabaseAdmin
+          .from('projects')
+          .insert({
+            name,
+            code,
+            description,
+            status: projectStatus || 'active',
+            start_date,
+            end_date,
+            budget,
+            department_id,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+
+        // 关联供应商
+        if (supplier_ids && supplier_ids.length > 0) {
+          const supplierInserts = supplier_ids.map((supplierId: string) => ({
+            project_id: project.id,
+            supplier_id: supplierId,
+          }));
+          await supabaseAdmin.from('project_suppliers').insert(supplierInserts);
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, project }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'update_project': {
+        const { projectId, name, code, description, status: projectStatus, start_date, end_date, budget, department_id, supplier_ids } = params;
+
+        const { error: updateError } = await supabaseAdmin
+          .from('projects')
+          .update({
+            name,
+            code,
+            description,
+            status: projectStatus,
+            start_date,
+            end_date,
+            budget,
+            department_id,
+          })
+          .eq('id', projectId);
+
+        if (updateError) throw updateError;
+
+        // 更新供应商关联
+        if (supplier_ids !== undefined) {
+          await supabaseAdmin
+            .from('project_suppliers')
+            .delete()
+            .eq('project_id', projectId);
+
+          if (supplier_ids.length > 0) {
+            const supplierInserts = supplier_ids.map((supplierId: string) => ({
+              project_id: projectId,
+              supplier_id: supplierId,
+            }));
+            await supabaseAdmin.from('project_suppliers').insert(supplierInserts);
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'delete_project': {
+        const { projectId } = params;
+
+        // 先删除关联
+        await supabaseAdmin
+          .from('project_suppliers')
+          .delete()
+          .eq('project_id', projectId);
+
+        const { error: deleteError } = await supabaseAdmin
+          .from('projects')
+          .delete()
+          .eq('id', projectId);
+
+        if (deleteError) throw deleteError;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // ========== 服务管理 ==========
+      case 'get_services': {
+        const { data: services, error } = await supabaseAdmin
+          .from('services')
+          .select(`
+            *,
+            suppliers (
+              id,
+              company_name,
+              supplier_type,
+              contact_name,
+              contact_phone,
+              status
+            )
+          `)
+          .eq('suppliers.status', 'approved')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const formattedServices = services?.map(s => ({
+          ...s,
+          supplier: s.suppliers,
+          suppliers: undefined,
+        })) || [];
+
+        return new Response(
+          JSON.stringify({ services: formattedServices }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_supplier_detail': {
+        const { supplierId } = params;
+
+        const { data: supplier, error: supplierError } = await supabaseAdmin
+          .from('suppliers')
+          .select('*')
+          .eq('id', supplierId)
+          .single();
+
+        if (supplierError) throw supplierError;
+
+        const { data: products } = await supabaseAdmin
+          .from('products')
+          .select('id, name, code, unit, price, specifications')
+          .eq('supplier_id', supplierId)
+          .eq('is_active', true);
+
+        const { data: qualifications } = await supabaseAdmin
+          .from('qualifications')
+          .select('id, name, certificate_number, issuing_authority, expire_date, status')
+          .eq('supplier_id', supplierId);
+
+        return new Response(
+          JSON.stringify({
+            supplier,
+            products: products || [],
+            qualifications: qualifications || [],
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'update_service_status': {
+        const { serviceId, isActive } = params;
+
+        const { error: updateError } = await supabaseAdmin
+          .from('services')
+          .update({ is_active: isActive })
+          .eq('id', serviceId);
+
+        if (updateError) throw updateError;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: '未知操作' }),
