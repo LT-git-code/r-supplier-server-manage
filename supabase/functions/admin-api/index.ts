@@ -758,6 +758,247 @@ serve(async (req) => {
         );
       }
 
+      // ========== 报表管理 ==========
+      case 'get_report_statistics': {
+        // 获取报表统计数据
+        const { data: templates } = await supabaseAdmin
+          .from('report_templates')
+          .select('id, name, is_active, created_at');
+
+        const { data: submissions } = await supabaseAdmin
+          .from('report_submissions')
+          .select('id, status, template_id, submitted_at, reviewed_at');
+
+        const { data: suppliers } = await supabaseAdmin
+          .from('suppliers')
+          .select('id')
+          .eq('status', 'approved');
+
+        const templateCount = templates?.length || 0;
+        const activeTemplateCount = templates?.filter(t => t.is_active).length || 0;
+        const submissionCount = submissions?.length || 0;
+        const pendingCount = submissions?.filter(s => s.status === 'pending').length || 0;
+        const approvedCount = submissions?.filter(s => s.status === 'approved').length || 0;
+        const rejectedCount = submissions?.filter(s => s.status === 'rejected').length || 0;
+        const supplierCount = suppliers?.length || 0;
+
+        // 计算提交率
+        const submissionRate = supplierCount > 0 && templateCount > 0 
+          ? Math.round((submissionCount / (supplierCount * activeTemplateCount)) * 100) 
+          : 0;
+
+        // 按模板统计提交情况
+        const templateStats = templates?.map(t => {
+          const templateSubmissions = submissions?.filter(s => s.template_id === t.id) || [];
+          return {
+            id: t.id,
+            name: t.name,
+            total: templateSubmissions.length,
+            pending: templateSubmissions.filter(s => s.status === 'pending').length,
+            approved: templateSubmissions.filter(s => s.status === 'approved').length,
+            rejected: templateSubmissions.filter(s => s.status === 'rejected').length,
+          };
+        }) || [];
+
+        // 月度趋势
+        const now = new Date();
+        const monthlyTrend = [];
+        for (let i = 5; i >= 0; i--) {
+          const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          const monthSubmissions = submissions?.filter(s => {
+            if (!s.submitted_at) return false;
+            const submitDate = new Date(s.submitted_at);
+            return submitDate.getFullYear() === date.getFullYear() && 
+                   submitDate.getMonth() === date.getMonth();
+          }) || [];
+          monthlyTrend.push({
+            month: monthKey,
+            submissions: monthSubmissions.length,
+            approved: monthSubmissions.filter(s => s.status === 'approved').length,
+          });
+        }
+
+        return new Response(
+          JSON.stringify({
+            templateCount,
+            activeTemplateCount,
+            submissionCount,
+            pendingCount,
+            approvedCount,
+            rejectedCount,
+            supplierCount,
+            submissionRate,
+            templateStats,
+            monthlyTrend,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_report_templates': {
+        const { data: templates, error } = await supabaseAdmin
+          .from('report_templates')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ templates: templates || [] }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'create_report_template': {
+        const { name, description, file_url, deadline, target_roles, supplier_selection_type, target_supplier_ids } = params;
+
+        const { data: template, error } = await supabaseAdmin
+          .from('report_templates')
+          .insert({
+            name,
+            description,
+            file_url,
+            deadline,
+            target_roles: target_roles || ['supplier'],
+            supplier_selection_type: supplier_selection_type || 'all',
+            target_supplier_ids: target_supplier_ids || null,
+            is_active: true,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ success: true, template }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'update_report_template': {
+        const { templateId, name, description, file_url, deadline, target_roles, supplier_selection_type, target_supplier_ids, is_active } = params;
+
+        const updateData: Record<string, unknown> = {};
+        if (name !== undefined) updateData.name = name;
+        if (description !== undefined) updateData.description = description;
+        if (file_url !== undefined) updateData.file_url = file_url;
+        if (deadline !== undefined) updateData.deadline = deadline;
+        if (target_roles !== undefined) updateData.target_roles = target_roles;
+        if (supplier_selection_type !== undefined) updateData.supplier_selection_type = supplier_selection_type;
+        if (target_supplier_ids !== undefined) updateData.target_supplier_ids = target_supplier_ids;
+        if (is_active !== undefined) updateData.is_active = is_active;
+
+        const { error } = await supabaseAdmin
+          .from('report_templates')
+          .update(updateData)
+          .eq('id', templateId);
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'delete_report_template': {
+        const { templateId } = params;
+
+        // 先删除相关提交记录
+        await supabaseAdmin
+          .from('report_submissions')
+          .delete()
+          .eq('template_id', templateId);
+
+        const { error } = await supabaseAdmin
+          .from('report_templates')
+          .delete()
+          .eq('id', templateId);
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_report_submissions': {
+        const { templateId, status: submissionStatus } = params;
+
+        let query = supabaseAdmin
+          .from('report_submissions')
+          .select(`
+            *,
+            report_templates (id, name, deadline),
+            suppliers:supplier_id (id, company_name, supplier_type, contact_name)
+          `)
+          .order('created_at', { ascending: false });
+
+        if (templateId) {
+          query = query.eq('template_id', templateId);
+        }
+        if (submissionStatus) {
+          query = query.eq('status', submissionStatus);
+        }
+
+        const { data: submissions, error } = await query;
+        if (error) throw error;
+
+        const formattedSubmissions = submissions?.map(s => ({
+          ...s,
+          template: s.report_templates,
+          supplier: s.suppliers,
+          report_templates: undefined,
+          suppliers: undefined,
+        })) || [];
+
+        return new Response(
+          JSON.stringify({ submissions: formattedSubmissions }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'review_report_submission': {
+        const { submissionId, status: reviewStatus, review_comment } = params;
+
+        const { error } = await supabaseAdmin
+          .from('report_submissions')
+          .update({
+            status: reviewStatus,
+            review_comment,
+            reviewed_by: user.id,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('id', submissionId);
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_all_approved_suppliers': {
+        // 获取所有审核通过的供应商（用于Excel导入匹配）
+        const { data: suppliers, error } = await supabaseAdmin
+          .from('suppliers')
+          .select('id, company_name, unified_social_credit_code, supplier_type, contact_name, contact_phone')
+          .eq('status', 'approved')
+          .eq('is_blacklisted', false)
+          .order('company_name');
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ suppliers: suppliers || [] }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: '未知操作' }),

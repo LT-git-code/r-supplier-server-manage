@@ -785,7 +785,9 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string
+          supplier_selection_type: string | null
           target_roles: Database["public"]["Enums"]["app_role"][] | null
+          target_supplier_ids: string[] | null
         }
         Insert: {
           created_at?: string
@@ -796,7 +798,9 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name: string
+          supplier_selection_type?: string | null
           target_roles?: Database["public"]["Enums"]["app_role"][] | null
+          target_supplier_ids?: string[] | null
         }
         Update: {
           created_at?: string
@@ -807,7 +811,9 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
+          supplier_selection_type?: string | null
           target_roles?: Database["public"]["Enums"]["app_role"][] | null
+          target_supplier_ids?: string[] | null
         }
         Relationships: []
       }
