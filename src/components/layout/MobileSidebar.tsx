@@ -59,9 +59,9 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
 
   const getRoleLabel = () => {
     switch (currentRole) {
-      case 'supplier': return '供应商端';
-      case 'department': return '青山部门端';
-      case 'admin': return '效率委总管理端';
+      case 'supplier': return '供应商';
+      case 'department': return '部门';
+      case 'admin': return '管理员';
       default: return '';
     }
   };

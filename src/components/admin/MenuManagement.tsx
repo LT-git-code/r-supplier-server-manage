@@ -218,8 +218,8 @@ export default function MenuManagement() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="admin">效率委总管理端</SelectItem>
-              <SelectItem value="department">青山部门端</SelectItem>
+              <SelectItem value="admin">管理员端</SelectItem>
+              <SelectItem value="department">部门端</SelectItem>
               <SelectItem value="supplier">供应商端</SelectItem>
             </SelectContent>
           </Select>
@@ -369,8 +369,8 @@ export default function MenuManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="admin">效率委总管理端</SelectItem>
-                    <SelectItem value="department">青山部门端</SelectItem>
+                    <SelectItem value="admin">管理员端</SelectItem>
+                    <SelectItem value="department">部门端</SelectItem>
                     <SelectItem value="supplier">供应商端</SelectItem>
                   </SelectContent>
                 </Select>
