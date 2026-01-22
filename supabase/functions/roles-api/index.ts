@@ -127,6 +127,160 @@ serve(async (req) => {
         );
       }
 
+      case 'get_all_menus': {
+        if (!isAdmin) {
+          return new Response(
+            JSON.stringify({ error: '只有管理员可以管理菜单' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { terminal } = params;
+        
+        const { data: allMenus, error: menuError } = await supabaseAdmin
+          .from('menu_permissions')
+          .select('*')
+          .eq('terminal', terminal)
+          .order('sort_order');
+
+        if (menuError) throw menuError;
+
+        return new Response(
+          JSON.stringify({ menus: allMenus || [] }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'create_menu': {
+        if (!isAdmin) {
+          return new Response(
+            JSON.stringify({ error: '只有管理员可以创建菜单' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { menu } = params;
+        
+        const { data: newMenu, error: createError } = await supabaseAdmin
+          .from('menu_permissions')
+          .insert({
+            menu_key: menu.menu_key,
+            menu_name: menu.menu_name,
+            menu_path: menu.menu_path,
+            terminal: menu.terminal,
+            sort_order: menu.sort_order || 0,
+            icon: menu.icon || null,
+            parent_key: menu.parent_key || null,
+            is_active: true,
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+
+        return new Response(
+          JSON.stringify({ success: true, menu: newMenu }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'update_menu': {
+        if (!isAdmin) {
+          return new Response(
+            JSON.stringify({ error: '只有管理员可以更新菜单' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { menuId, menu } = params;
+        
+        const { error: updateError } = await supabaseAdmin
+          .from('menu_permissions')
+          .update({
+            menu_key: menu.menu_key,
+            menu_name: menu.menu_name,
+            menu_path: menu.menu_path,
+            terminal: menu.terminal,
+            sort_order: menu.sort_order || 0,
+            icon: menu.icon || null,
+            parent_key: menu.parent_key || null,
+          })
+          .eq('id', menuId);
+
+        if (updateError) throw updateError;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'toggle_menu_status': {
+        if (!isAdmin) {
+          return new Response(
+            JSON.stringify({ error: '只有管理员可以修改菜单状态' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { menuId, isActive } = params;
+        
+        const { error: updateError } = await supabaseAdmin
+          .from('menu_permissions')
+          .update({ is_active: isActive })
+          .eq('id', menuId);
+
+        if (updateError) throw updateError;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'delete_menu': {
+        if (!isAdmin) {
+          return new Response(
+            JSON.stringify({ error: '只有管理员可以删除菜单' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { menuId } = params;
+
+        // 先检查菜单是否已禁用
+        const { data: menuData } = await supabaseAdmin
+          .from('menu_permissions')
+          .select('is_active')
+          .eq('id', menuId)
+          .single();
+
+        if (menuData?.is_active) {
+          return new Response(
+            JSON.stringify({ error: '只能删除已禁用的菜单' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 删除相关的角色-菜单关联
+        await supabaseAdmin
+          .from('role_menu_permissions')
+          .delete()
+          .eq('menu_id', menuId);
+        
+        const { error: deleteError } = await supabaseAdmin
+          .from('menu_permissions')
+          .delete()
+          .eq('id', menuId);
+
+        if (deleteError) throw deleteError;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       case 'create_role': {
         if (!isAdmin) {
           return new Response(
