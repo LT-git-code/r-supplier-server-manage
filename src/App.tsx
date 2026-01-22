@@ -31,6 +31,7 @@ import DeptProducts from "./pages/dept/DeptProducts";
 import DeptProjects from "./pages/dept/DeptProjects";
 import DeptServices from "./pages/dept/DeptServices";
 import DeptRoles from "./pages/dept/DeptRoles";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -82,7 +83,7 @@ const App = () => (
               <Route path="/admin/seed-data" element={<SeedTestData />} />
               
               {/* 个人设置 */}
-              <Route path="/profile" element={<div className="p-4">个人设置（开发中）</div>} />
+              <Route path="/profile" element={<Profile />} />
             </Route>
             
             {/* 404 */}

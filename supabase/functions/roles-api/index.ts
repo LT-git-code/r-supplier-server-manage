@@ -93,7 +93,8 @@ serve(async (req) => {
         }));
 
         // 获取用户列表（根据终端类型筛选）
-        const targetRole = terminal === 'admin' ? 'admin' : 'department';
+        // 支持三个终端：admin, department, supplier
+        const targetRole = terminal === 'admin' ? 'admin' : (terminal === 'supplier' ? 'supplier' : 'department');
         const { data: targetUsers } = await supabaseAdmin
           .from('user_roles')
           .select('user_id')

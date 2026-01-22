@@ -91,8 +91,12 @@ export default function DeptRoles({ embedded = false }: DeptRolesProps) {
     menu_permissions: [] as string[],
   });
   const [userRoleIds, setUserRoleIds] = useState<string[]>([]);
+  const [terminalFilter, setTerminalFilter] = useState<string>(
+    currentRole === 'admin' ? 'admin' : 'department'
+  );
 
-  const terminal = currentRole === 'admin' ? 'admin' : 'department';
+  // 当在管理员端时，允许选择终端；否则固定为 department
+  const terminal = currentRole === 'admin' ? terminalFilter : 'department';
 
   const fetchData = async () => {
     setLoading(true);
@@ -231,8 +235,22 @@ export default function DeptRoles({ embedded = false }: DeptRolesProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        {!embedded && <h1 className="text-2xl font-bold">后台角色管理</h1>}
-        {embedded && <div />}
+        <div className="flex items-center gap-4">
+          {!embedded && <h1 className="text-2xl font-bold">后台角色管理</h1>}
+          {embedded && <div />}
+          {currentRole === 'admin' && (
+            <Select value={terminalFilter} onValueChange={setTerminalFilter}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="admin">管理员端</SelectItem>
+                <SelectItem value="department">部门端</SelectItem>
+                <SelectItem value="supplier">供应商端</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
         <Button onClick={handleCreateRole}>
           <Plus className="mr-2 h-4 w-4" />
           新建角色

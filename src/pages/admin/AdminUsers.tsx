@@ -100,6 +100,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [terminalFilter, setTerminalFilter] = useState<string>('all');
 
   // 创建用户弹窗
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -304,7 +305,10 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
     
     const matchesRole = roleFilter === 'all' || user.roles.includes(roleFilter);
     
-    return matchesSearch && matchesRole;
+    // 根据终端过滤：如果选择了特定终端，只显示包含该终端角色的用户
+    const matchesTerminal = terminalFilter === 'all' || user.roles.includes(terminalFilter);
+    
+    return matchesSearch && matchesRole && matchesTerminal;
   });
 
   if (loading) {
@@ -315,16 +319,36 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
     );
   }
 
+  // 根据终端过滤后的用户列表（用于统计）
+  const terminalFilteredUsers = terminalFilter === 'all' 
+    ? users 
+    : users.filter(u => u.roles.includes(terminalFilter));
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        {!embedded && (
-          <div>
-            <h1 className="text-2xl font-bold">用户管理</h1>
-            <p className="text-muted-foreground">管理系统用户账号和权限</p>
-          </div>
-        )}
-        {embedded && <div />}
+        <div className="flex items-center gap-4">
+          {!embedded && (
+            <div>
+              <h1 className="text-2xl font-bold">用户管理</h1>
+              <p className="text-muted-foreground">管理系统用户账号和权限</p>
+            </div>
+          )}
+          {embedded && <div />}
+          {authUser?.isAdmin && (
+            <Select value={terminalFilter} onValueChange={setTerminalFilter}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部终端</SelectItem>
+                <SelectItem value="admin">管理员端</SelectItem>
+                <SelectItem value="department">部门端</SelectItem>
+                <SelectItem value="supplier">供应商端</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
         <div className="flex gap-2">
           <Dialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen}>
             <DialogTrigger asChild>
@@ -465,7 +489,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
             <CardTitle className="text-sm font-medium text-muted-foreground">总用户数</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{users.length}</div>
+            <div className="text-2xl font-bold">{terminalFilteredUsers.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -474,7 +498,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter(u => u.roles.includes('admin')).length}
+              {terminalFilteredUsers.filter(u => u.roles.includes('admin')).length}
             </div>
           </CardContent>
         </Card>
@@ -484,7 +508,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter(u => u.roles.includes('department')).length}
+              {terminalFilteredUsers.filter(u => u.roles.includes('department')).length}
             </div>
           </CardContent>
         </Card>
@@ -494,7 +518,7 @@ export default function AdminUsers({ embedded = false }: AdminUsersProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter(u => u.roles.includes('supplier')).length}
+              {terminalFilteredUsers.filter(u => u.roles.includes('supplier')).length}
             </div>
           </CardContent>
         </Card>
