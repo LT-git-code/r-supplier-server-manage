@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Shield, Settings } from 'lucide-react';
+import { Users, Shield, Menu } from 'lucide-react';
 import AdminUsers from './AdminUsers';
 import DeptRoles from '@/pages/dept/DeptRoles';
+import MenuManagement from '@/components/admin/MenuManagement';
 
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState('users');
@@ -25,6 +25,10 @@ export default function AdminSettings() {
             <Shield className="h-4 w-4" />
             后台角色管理
           </TabsTrigger>
+          <TabsTrigger value="menus" className="flex items-center gap-2">
+            <Menu className="h-4 w-4" />
+            菜单管理
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="mt-4">
@@ -33,6 +37,10 @@ export default function AdminSettings() {
 
         <TabsContent value="roles" className="mt-4">
           <DeptRoles embedded />
+        </TabsContent>
+
+        <TabsContent value="menus" className="mt-4">
+          <MenuManagement />
         </TabsContent>
       </Tabs>
     </div>
