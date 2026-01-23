@@ -72,7 +72,6 @@ import {
   Star,
   StarOff,
   MoreHorizontal,
-  AlertTriangle,
   Library,
   Crown,
 } from 'lucide-react';
@@ -121,7 +120,6 @@ interface Supplier {
   is_recommended: boolean;
   blacklisted_at: string | null;
   blacklist_reason: string | null;
-  has_objection?: boolean;
 }
 
 interface Statistics {
@@ -219,10 +217,6 @@ export default function AdminSuppliers() {
   // 拉黑对话框
   const [blacklistDialogOpen, setBlacklistDialogOpen] = useState(false);
   const [blacklistReason, setBlacklistReason] = useState('');
-
-  // 异议对话框
-  const [objectionDialogOpen, setObjectionDialogOpen] = useState(false);
-  const [objectionReason, setObjectionReason] = useState('');
 
   const fetchStatistics = async () => {
     try {
@@ -533,38 +527,6 @@ export default function AdminSuppliers() {
       setProcessing(false);
     }
   };
-
-  // 标记异议
-  const handleObjection = async () => {
-    if (!selectedSupplier) return;
-
-    try {
-      setProcessing(true);
-      const { error } = await supabase.functions.invoke('admin-suppliers', {
-        body: { 
-          action: 'add_objection', 
-          supplierId: selectedSupplier.id,
-          reason: objectionReason,
-        },
-      });
-
-      if (error) throw error;
-
-      toast({ title: '已标记异议' });
-      setObjectionDialogOpen(false);
-      setObjectionReason('');
-      fetchSuppliers();
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: '操作失败',
-        description: error.message,
-      });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
   const totalPages = Math.ceil(total / pageSize);
 
   return (
@@ -733,9 +695,6 @@ export default function AdminSuppliers() {
                                   {supplier.is_blacklisted && (
                                     <span className="text-xs text-destructive font-normal">拉黑</span>
                                   )}
-                                  {supplier.has_objection && (
-                                    <span className="text-xs text-orange-500 font-normal">异议</span>
-                                  )}
                                 </div>
                                 {supplier.unified_social_credit_code && (
                                   <div className="text-xs text-muted-foreground">
@@ -813,15 +772,6 @@ export default function AdminSuppliers() {
                                     拉黑
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem 
-                                  onClick={() => {
-                                    setSelectedSupplier(supplier);
-                                    setObjectionDialogOpen(true);
-                                  }}
-                                >
-                                  <AlertTriangle className="h-4 w-4 mr-2" />
-                                  异议
-                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -1448,40 +1398,6 @@ export default function AdminSuppliers() {
         </DialogContent>
       </Dialog>
 
-      {/* 异议对话框 */}
-      <Dialog open={objectionDialogOpen} onOpenChange={setObjectionDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>标记异议</DialogTitle>
-            <DialogDescription>
-              标记该供应商存在异议，将在列表中显示异议标签。
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-2">
-            <Label>异议原因 *</Label>
-            <Textarea
-              value={objectionReason}
-              onChange={(e) => setObjectionReason(e.target.value)}
-              placeholder="请输入异议原因..."
-              rows={3}
-            />
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setObjectionDialogOpen(false)}>
-              取消
-            </Button>
-            <Button 
-              onClick={handleObjection} 
-              disabled={processing || !objectionReason.trim()}
-            >
-              {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              确认标记
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
