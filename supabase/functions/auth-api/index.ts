@@ -475,7 +475,70 @@ serve(async (req) => {
           );
         }
 
-        // 再次检查手机号是否已被注册
+        // 生成临时邮箱
+        const tempEmail = `${phone}@phone.supplier.local`;
+
+        // 检查该临时邮箱是否已存在于auth系统中
+        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+        const existingAuthUser = existingUsers?.users?.find(u => u.email === tempEmail);
+
+        if (existingAuthUser) {
+          // 用户已存在，检查是否有供应商角色
+          const { data: existingRole } = await supabaseAdmin
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', existingAuthUser.id)
+            .eq('role', 'supplier')
+            .maybeSingle();
+
+          if (existingRole) {
+            return new Response(
+              JSON.stringify({ error: '该手机号已被注册，请直接登录' }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          // 用户存在但没有供应商角色，可能是之前注册失败的情况
+          // 更新密码并添加角色
+          const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+            existingAuthUser.id,
+            { password: password }
+          );
+
+          if (updateError) {
+            console.error('Update user error:', updateError);
+            return new Response(
+              JSON.stringify({ error: '注册失败，请稍后重试' }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          // 确保profile中有手机号
+          await supabaseAdmin
+            .from('profiles')
+            .update({ phone: phone })
+            .eq('user_id', existingAuthUser.id);
+
+          // 添加供应商角色
+          await supabaseAdmin
+            .from('user_roles')
+            .upsert({
+              user_id: existingAuthUser.id,
+              role: 'supplier'
+            }, { onConflict: 'user_id,role' });
+
+          return new Response(
+            JSON.stringify({ 
+              success: true,
+              message: '注册成功',
+              email: tempEmail,
+              password: password
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 再次检查手机号是否已被注册（profiles表）
         const { data: existingProfile } = await supabaseAdmin
           .from('profiles')
           .select('user_id')
@@ -484,15 +547,12 @@ serve(async (req) => {
 
         if (existingProfile) {
           return new Response(
-            JSON.stringify({ error: '该手机号已被注册' }),
+            JSON.stringify({ error: '该手机号已被注册，请直接登录' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // 生成一个临时邮箱用于注册（Supabase要求邮箱）
-        const tempEmail = `${phone}@phone.supplier.local`;
-
-        // 创建用户
+        // 创建新用户
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email: tempEmail,
           password: password,
