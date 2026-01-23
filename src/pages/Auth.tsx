@@ -7,15 +7,18 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Building2, AlertCircle, Users, ShieldCheck } from 'lucide-react';
+import { Loader2, Building2, AlertCircle, Users, ShieldCheck, Smartphone, Mail } from 'lucide-react';
 import { LoginAnnouncements } from '@/components/auth/LoginAnnouncements';
 import { ComplaintDialog } from '@/components/auth/ComplaintDialog';
+import { ForgotPasswordDialog } from '@/components/auth/ForgotPasswordDialog';
+import { PhoneLoginForm } from '@/components/auth/PhoneLoginForm';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('请输入有效的邮箱地址');
 const passwordSchema = z.string().min(6, '密码至少需要6个字符');
 
 type RegisterRole = 'supplier' | 'department' | null;
+type LoginMethod = 'email' | 'phone';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -23,6 +26,7 @@ export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
   
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'login');
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -30,6 +34,7 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<RegisterRole>(null);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -132,6 +137,14 @@ export default function Auth() {
 
   const handleBackToRoleSelect = () => {
     setSelectedRole(null);
+  };
+
+  const handlePhoneLoginSuccess = () => {
+    // Phone login successful, navigation will be handled by useEffect
+  };
+
+  const handlePhoneLoginError = (errorMsg: string) => {
+    setError(errorMsg);
   };
 
   if (loading) {
@@ -281,6 +294,48 @@ export default function Auth() {
     </form>
   );
 
+  // 登录表单 - 邮箱密码
+  const renderEmailLoginForm = () => (
+    <form onSubmit={handleLogin} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="login-email">邮箱</Label>
+        <Input
+          id="login-email"
+          type="email"
+          placeholder="请输入邮箱"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={isSubmitting}
+          required
+        />
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="login-password">密码</Label>
+        <Input
+          id="login-password"
+          type="password"
+          placeholder="请输入密码"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={isSubmitting}
+          required
+        />
+      </div>
+      
+      <Button type="submit" className="w-full" disabled={isSubmitting}>
+        {isSubmitting ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            登录中...
+          </>
+        ) : (
+          '登录'
+        )}
+      </Button>
+    </form>
+  );
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
       <div className="w-full max-w-4xl flex gap-6 items-start">
@@ -303,7 +358,7 @@ export default function Auth() {
         </div>
 
         <Card className="shadow-lg border-0 bg-card/80 backdrop-blur-sm">
-          <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setSelectedRole(null); }}>
+          <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setSelectedRole(null); setError(null); }}>
             <CardHeader className="pb-4">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">登录</TabsTrigger>
@@ -326,44 +381,38 @@ export default function Auth() {
               )}
 
               <TabsContent value="login" className="mt-0">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email">邮箱</Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="请输入邮箱"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={isSubmitting}
-                      required
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password">密码</Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      placeholder="请输入密码"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={isSubmitting}
-                      required
-                    />
-                  </div>
-                  
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        登录中...
-                      </>
-                    ) : (
-                      '登录'
-                    )}
+                {/* 登录方式切换 */}
+                <div className="flex gap-2 mb-4">
+                  <Button
+                    type="button"
+                    variant={loginMethod === 'email' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => { setLoginMethod('email'); setError(null); }}
+                  >
+                    <Mail className="mr-2 h-4 w-4" />
+                    邮箱登录
                   </Button>
-                </form>
+                  <Button
+                    type="button"
+                    variant={loginMethod === 'phone' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => { setLoginMethod('phone'); setError(null); }}
+                  >
+                    <Smartphone className="mr-2 h-4 w-4" />
+                    验证码登录
+                  </Button>
+                </div>
+
+                {loginMethod === 'email' ? (
+                  renderEmailLoginForm()
+                ) : (
+                  <PhoneLoginForm 
+                    onSuccess={handlePhoneLoginSuccess}
+                    onError={handlePhoneLoginError}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="register" className="mt-0">
@@ -373,31 +422,42 @@ export default function Auth() {
           </Tabs>
           
           <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground pt-0">
-            <p className="text-left w-full">
-              {activeTab === 'login' ? (
-                <>
-                  还没有账号？{' '}
-                  <button
-                    type="button"
-                    className="text-primary hover:underline"
-                    onClick={() => setActiveTab('register')}
-                  >
-                    立即注册
-                  </button>
-                </>
-              ) : (
-                <>
-                  已有账号？{' '}
-                  <button
-                    type="button"
-                    className="text-primary hover:underline"
-                    onClick={() => setActiveTab('login')}
-                  >
-                    返回登录
-                  </button>
-                </>
+            <div className="flex items-center justify-between w-full">
+              <p>
+                {activeTab === 'login' ? (
+                  <>
+                    还没有账号？{' '}
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => setActiveTab('register')}
+                    >
+                      立即注册
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    已有账号？{' '}
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => setActiveTab('login')}
+                    >
+                      返回登录
+                    </button>
+                  </>
+                )}
+              </p>
+              {activeTab === 'login' && (
+                <button
+                  type="button"
+                  className="text-primary hover:underline"
+                  onClick={() => setForgotPasswordOpen(true)}
+                >
+                  找回密码
+                </button>
               )}
-            </p>
+            </div>
           </CardFooter>
         </Card>
         
@@ -409,6 +469,13 @@ export default function Auth() {
         </div>
         </div>
       </div>
+
+      {/* 找回密码弹窗 */}
+      <ForgotPasswordDialog 
+        open={forgotPasswordOpen} 
+        onOpenChange={setForgotPasswordOpen}
+        userType={null}
+      />
     </div>
   );
 }
