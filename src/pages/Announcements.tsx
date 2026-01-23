@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupplierApi } from '@/hooks/useSupplierApi';
 import { useDeptApi } from '@/hooks/useDeptApi';
 import { useAdminDashboardApi } from '@/hooks/useAdminDashboardApi';
-import { Bell } from 'lucide-react';
+import { Bell, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Announcement {
@@ -22,6 +24,7 @@ export default function Announcements() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { currentRole } = useAuth();
+  const navigate = useNavigate();
 
   const supplierApi = useSupplierApi();
   const deptApi = useDeptApi();
@@ -62,9 +65,12 @@ export default function Announcements() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div>
-          <Skeleton className="h-8 w-32" />
-          <Skeleton className="h-4 w-48 mt-2" />
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-4 w-48 mt-2" />
+          </div>
+          <Skeleton className="h-9 w-20" />
         </div>
         <div className="space-y-4">
           {[1, 2, 3, 4, 5].map(i => (
@@ -85,12 +91,18 @@ export default function Announcements() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Bell className="h-6 w-6" />
-          公告中心
-        </h1>
-        <p className="text-muted-foreground">查看平台发布的所有公告通知</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Bell className="h-6 w-6" />
+            公告中心
+          </h1>
+          <p className="text-muted-foreground">查看平台发布的所有公告通知</p>
+        </div>
+        <Button variant="outline" onClick={() => navigate('/dashboard')}>
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          返回
+        </Button>
       </div>
 
       {announcements.length === 0 ? (
