@@ -23,6 +23,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   FileText,
   Upload,
   Download,
@@ -31,8 +41,11 @@ import {
   XCircle,
   Loader2,
   AlertTriangle,
+  Plus,
 } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
+import CreateReportDialog from '@/components/supplier/reports/CreateReportDialog';
+import PendingReportCard, { PendingReport } from '@/components/supplier/reports/PendingReportCard';
 
 interface ReportTemplate {
   id: string;
@@ -69,6 +82,34 @@ export default function SupplierReports() {
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
   const [fileUrl, setFileUrl] = useState('');
+
+  // New report states
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [creatingReport, setCreatingReport] = useState(false);
+  const [pendingReports, setPendingReports] = useState<PendingReport[]>([]);
+  const [selectedPendingReport, setSelectedPendingReport] = useState<PendingReport | null>(null);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingFileUrl, setPendingFileUrl] = useState('');
+
+  // Load pending reports from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('supplier_pending_reports');
+    if (saved) {
+      try {
+        setPendingReports(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse pending reports:', e);
+      }
+    }
+  }, []);
+
+  // Save pending reports to localStorage
+  useEffect(() => {
+    if (pendingReports.length > 0) {
+      localStorage.setItem('supplier_pending_reports', JSON.stringify(pendingReports));
+    }
+  }, [pendingReports]);
 
   useEffect(() => {
     loadData();
@@ -161,6 +202,86 @@ export default function SupplierReports() {
     return submissions.find(s => s.template_id === templateId);
   };
 
+  // Create new report handler
+  const handleCreateReport = async (data: {
+    reportType: string;
+    reportTypeName: string;
+    deadline: string;
+  }) => {
+    setCreatingReport(true);
+    try {
+      const newReport: PendingReport = {
+        id: crypto.randomUUID(),
+        reportType: data.reportType,
+        reportTypeName: data.reportTypeName,
+        issuedAt: new Date().toISOString(),
+        deadline: data.deadline,
+        status: 'pending',
+      };
+      setPendingReports(prev => [...prev, newReport]);
+      toast({ title: '创建成功', description: `已创建${data.reportTypeName}` });
+      setShowCreateDialog(false);
+    } catch (error) {
+      toast({
+        title: '创建失败',
+        description: '无法创建报表',
+        variant: 'destructive',
+      });
+    } finally {
+      setCreatingReport(false);
+    }
+  };
+
+  // Upload handler for pending reports
+  const handlePendingUpload = (report: PendingReport) => {
+    setSelectedPendingReport(report);
+    setPendingFileUrl('');
+    setShowUploadDialog(true);
+  };
+
+  const confirmPendingUpload = () => {
+    if (!selectedPendingReport || !pendingFileUrl) {
+      toast({
+        title: '请填写报表文件URL',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setPendingReports(prev =>
+      prev.map(r =>
+        r.id === selectedPendingReport.id
+          ? { ...r, status: 'submitted' as const, fileUrl: pendingFileUrl }
+          : r
+      )
+    );
+    toast({ title: '上传成功', description: '报表已提交' });
+    setShowUploadDialog(false);
+    setSelectedPendingReport(null);
+    setPendingFileUrl('');
+  };
+
+  // Download handler for pending reports
+  const handlePendingDownload = (report: PendingReport) => {
+    if (report.fileUrl) {
+      window.open(report.fileUrl, '_blank');
+    }
+  };
+
+  // Delete handler for pending reports
+  const handlePendingDelete = (report: PendingReport) => {
+    setSelectedPendingReport(report);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    if (!selectedPendingReport) return;
+    setPendingReports(prev => prev.filter(r => r.id !== selectedPendingReport.id));
+    toast({ title: '删除成功', description: '报表已删除' });
+    setShowDeleteConfirm(false);
+    setSelectedPendingReport(null);
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -218,23 +339,42 @@ export default function SupplierReports() {
         </Card>
       </div>
 
-      {/* 待提交报表 */}
+      {/* 新建报表 - 自定义报表 */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            待提交报表
-          </CardTitle>
-          <CardDescription>需要您填写并提交的报表</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              待提交报表
+            </CardTitle>
+            <CardDescription>需要您填写并提交的报表</CardDescription>
+          </div>
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            新建报表
+          </Button>
         </CardHeader>
         <CardContent>
-          {templates.length === 0 ? (
+          {pendingReports.length === 0 && templates.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>暂无待提交报表</p>
+              <p className="text-sm mt-2">点击"新建报表"按钮创建新报表</p>
             </div>
           ) : (
             <div className="space-y-4">
+              {/* 自定义新建的报表 */}
+              {pendingReports.map(report => (
+                <PendingReportCard
+                  key={report.id}
+                  report={report}
+                  onUpload={handlePendingUpload}
+                  onDownload={handlePendingDownload}
+                  onDelete={handlePendingDelete}
+                />
+              ))}
+
+              {/* 管理员下发的模板报表 */}
               {templates.map(template => {
                 const submission = getTemplateSubmission(template.id);
                 return (
@@ -367,6 +507,63 @@ export default function SupplierReports() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 新建报表对话框 */}
+      <CreateReportDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onSubmit={handleCreateReport}
+        loading={creatingReport}
+      />
+
+      {/* 上传报表对话框 */}
+      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>上传报表</DialogTitle>
+            <DialogDescription>
+              上传报表：{selectedPendingReport?.reportTypeName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">报表文件URL</label>
+              <Input
+                placeholder="请输入已上传的报表文件URL"
+                value={pendingFileUrl}
+                onChange={e => setPendingFileUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                文件上传功能开发中，请先将文件上传至其他平台后填写URL
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUploadDialog(false)}>
+              取消
+            </Button>
+            <Button onClick={confirmPendingUpload} disabled={!pendingFileUrl}>
+              确认上传
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 删除确认对话框 */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要删除报表"{selectedPendingReport?.reportTypeName}"吗？此操作无法撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>确认删除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
