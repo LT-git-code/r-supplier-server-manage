@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { AttachmentUpload } from '@/components/supplier/AttachmentUpload';
 import {
   Building2,
   CreditCard,
@@ -329,7 +330,7 @@ export default function SupplierInfo() {
               <CardTitle>生产服务能力</CardTitle>
               <CardDescription>企业的生产和服务能力描述</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="employee_count">员工人数</Label>
@@ -361,6 +362,17 @@ export default function SupplierInfo() {
                   />
                 </div>
               </div>
+              
+              {info?.id && (
+                <div className="border-t pt-6">
+                  <AttachmentUpload
+                    supplierId={info.id}
+                    category="capacity"
+                    title="生产能力相关附件"
+                    description="上传设备清单、产能报告、生产线照片等文件"
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -371,7 +383,7 @@ export default function SupplierInfo() {
               <CardTitle>财务状况</CardTitle>
               <CardDescription>企业的财务信息概况</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="annual_revenue">年营业收入（万元）</Label>
@@ -383,11 +395,17 @@ export default function SupplierInfo() {
                   />
                 </div>
               </div>
-              <div className="bg-muted p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  更多财务信息（如负债情况、财务报表）请在资质提交中上传相关文件。
-                </p>
-              </div>
+              
+              {info?.id && (
+                <div className="border-t pt-6">
+                  <AttachmentUpload
+                    supplierId={info.id}
+                    category="finance"
+                    title="财务相关附件"
+                    description="上传财务报表、审计报告、纳税证明等文件"
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -399,11 +417,14 @@ export default function SupplierInfo() {
               <CardDescription>展示您的成功案例和项目经验</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <FolderOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>过往案例功能开发中</p>
-                <p className="text-sm mt-2">您可以在此展示与其他企业的合作案例和项目经验</p>
-              </div>
+              {info?.id && (
+                <AttachmentUpload
+                  supplierId={info.id}
+                  category="cases"
+                  title="过往案例附件"
+                  description="上传合作案例、项目经验、业绩证明等文件"
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
