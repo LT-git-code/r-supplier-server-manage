@@ -46,6 +46,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { AttachmentUpload } from '@/components/supplier/AttachmentUpload';
 import { 
   Loader2, 
   Search,
@@ -75,6 +76,7 @@ import {
   Library,
   Crown,
   AlertTriangle,
+  Paperclip,
 } from 'lucide-react';
 
 interface SupplierProfile {
@@ -997,11 +999,12 @@ export default function AdminSuppliers() {
               <Separator />
 
               <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="w-full">
-                  <TabsTrigger value="basic" className="flex-1">基本信息</TabsTrigger>
-                  <TabsTrigger value="qualifications" className="flex-1">资质证书</TabsTrigger>
-                  <TabsTrigger value="products" className="flex-1">产品</TabsTrigger>
-                  <TabsTrigger value="departments" className="flex-1">关联部门</TabsTrigger>
+                <TabsList className="w-full grid grid-cols-5">
+                  <TabsTrigger value="basic">基本信息</TabsTrigger>
+                  <TabsTrigger value="qualifications">资质证书</TabsTrigger>
+                  <TabsTrigger value="products">产品</TabsTrigger>
+                  <TabsTrigger value="attachments">附件</TabsTrigger>
+                  <TabsTrigger value="departments">关联部门</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="basic" className="space-y-4 mt-4">
@@ -1208,6 +1211,50 @@ export default function AdminSuppliers() {
                   ) : (
                     <p className="text-center py-8 text-muted-foreground">暂无产品</p>
                   )}
+                </TabsContent>
+
+                <TabsContent value="attachments" className="mt-4 space-y-6">
+                  <div>
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      生产能力附件
+                    </h4>
+                    <AttachmentUpload
+                      supplierId={selectedSupplier.id}
+                      category="capacity"
+                      title=""
+                      description="设备清单、产能报告、生产线照片等"
+                      readOnly
+                    />
+                  </div>
+                  <Separator />
+                  <div>
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      财务状况附件
+                    </h4>
+                    <AttachmentUpload
+                      supplierId={selectedSupplier.id}
+                      category="finance"
+                      title=""
+                      description="财务报表、审计报告、纳税证明等"
+                      readOnly
+                    />
+                  </div>
+                  <Separator />
+                  <div>
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      过往案例附件
+                    </h4>
+                    <AttachmentUpload
+                      supplierId={selectedSupplier.id}
+                      category="cases"
+                      title=""
+                      description="合作案例、项目经验、业绩证明等"
+                      readOnly
+                    />
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="departments" className="mt-4">

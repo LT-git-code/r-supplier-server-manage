@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import {
   Table,
   TableBody,
@@ -22,10 +23,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Search, Power, PowerOff, Upload, Building2, Star, FolderOpen, ShieldX } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Search, Power, PowerOff, Upload, Building2, Star, FolderOpen, ShieldX, Eye, Loader2, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import SupplierImportDialog from '@/components/dept/SupplierImportDialog';
+import { AttachmentUpload } from '@/components/supplier/AttachmentUpload';
 
 type LibraryTab = 'organization' | 'premium' | 'backup' | 'blacklist';
 
@@ -78,6 +87,8 @@ export default function DeptSuppliers() {
     supplier?: Supplier;
   }>({ open: false, type: 'enable' });
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
 
   const fetchSuppliers = async (tab: LibraryTab = activeTab) => {
     setLoading(true);
@@ -146,6 +157,11 @@ export default function DeptSuppliers() {
   const showDisableAction = activeTab === 'organization';
   const showBlacklistInfo = activeTab === 'blacklist';
 
+  const handleViewDetail = (supplier: Supplier) => {
+    setSelectedSupplier(supplier);
+    setDetailOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -199,21 +215,19 @@ export default function DeptSuppliers() {
                   <TableHead>联系电话</TableHead>
                   <TableHead>主营产品</TableHead>
                   <TableHead>标签</TableHead>
-                  {(showEnableAction || showDisableAction) && (
-                    <TableHead className="text-right">操作</TableHead>
-                  )}
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={showEnableAction || showDisableAction ? 7 : 6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       加载中...
                     </TableCell>
                   </TableRow>
                 ) : filteredSuppliers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={showEnableAction || showDisableAction ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       暂无供应商
                     </TableCell>
                   </TableRow>
@@ -247,8 +261,16 @@ export default function DeptSuppliers() {
                           )}
                         </div>
                       </TableCell>
-                      {(showEnableAction || showDisableAction) && (
-                        <TableCell className="text-right">
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewDetail(supplier)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            查看
+                          </Button>
                           {showDisableAction && supplier.library_type === 'current' && (
                             <Button
                               variant="ghost"
@@ -279,8 +301,8 @@ export default function DeptSuppliers() {
                               启用
                             </Button>
                           )}
-                        </TableCell>
-                      )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -329,6 +351,93 @@ export default function DeptSuppliers() {
         onOpenChange={setImportDialogOpen}
         onImportComplete={fetchSuppliers}
       />
+
+      {/* 供应商详情抽屉 */}
+      <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>供应商详情</SheetTitle>
+            <SheetDescription>
+              {selectedSupplier?.company_name || selectedSupplier?.contact_name}
+            </SheetDescription>
+          </SheetHeader>
+
+          {selectedSupplier && (
+            <div className="mt-6 space-y-6">
+              {/* 基本信息 */}
+              <div>
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  基本信息
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">公司名称：</span>
+                    <span className="ml-1">{selectedSupplier.company_name || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">类型：</span>
+                    <span className="ml-1">{getSupplierTypeBadge(selectedSupplier.supplier_type)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">联系人：</span>
+                    <span className="ml-1">{selectedSupplier.contact_name || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">联系电话：</span>
+                    <span className="ml-1">{selectedSupplier.contact_phone || '-'}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">主营产品：</span>
+                    <span className="ml-1">{selectedSupplier.main_products || '-'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* 附件信息 */}
+              <Tabs defaultValue="capacity" className="w-full">
+                <TabsList className="w-full grid grid-cols-3">
+                  <TabsTrigger value="capacity">生产能力</TabsTrigger>
+                  <TabsTrigger value="finance">财务状况</TabsTrigger>
+                  <TabsTrigger value="cases">过往案例</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="capacity" className="mt-4">
+                  <AttachmentUpload
+                    supplierId={selectedSupplier.id}
+                    category="capacity"
+                    title="生产能力附件"
+                    description="设备清单、产能报告、生产线照片等"
+                    readOnly
+                  />
+                </TabsContent>
+
+                <TabsContent value="finance" className="mt-4">
+                  <AttachmentUpload
+                    supplierId={selectedSupplier.id}
+                    category="finance"
+                    title="财务状况附件"
+                    description="财务报表、审计报告、纳税证明等"
+                    readOnly
+                  />
+                </TabsContent>
+
+                <TabsContent value="cases" className="mt-4">
+                  <AttachmentUpload
+                    supplierId={selectedSupplier.id}
+                    category="cases"
+                    title="过往案例附件"
+                    description="合作案例、项目经验、业绩证明等"
+                    readOnly
+                  />
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
