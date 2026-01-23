@@ -25,16 +25,11 @@ export function LoginAnnouncements() {
 
   const fetchAnnouncements = async () => {
     try {
-      const { data, error } = await supabase
-        .from('announcements')
-        .select('id, title, content, published_at')
-        .eq('is_published', true)
-        .contains('target_roles', ['supplier'])
-        .order('published_at', { ascending: false })
-        .limit(10);
+      // 调用公开边缘函数获取公告，无需认证
+      const { data, error } = await supabase.functions.invoke('public-announcements');
 
       if (error) throw error;
-      setAnnouncements(data || []);
+      setAnnouncements(data?.data || []);
     } catch (error) {
       console.error('Failed to fetch announcements:', error);
     } finally {
