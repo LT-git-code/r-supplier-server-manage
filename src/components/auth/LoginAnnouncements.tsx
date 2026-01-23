@@ -29,7 +29,7 @@ export function LoginAnnouncements() {
         .from('announcements')
         .select('id, title, content, published_at')
         .eq('is_published', true)
-        .contains('target_roles', ['supplier'])
+        .or('target_roles.is.null,target_roles.cs.{"supplier"}')
         .order('published_at', { ascending: false })
         .limit(10);
 
