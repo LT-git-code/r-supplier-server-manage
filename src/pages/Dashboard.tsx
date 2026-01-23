@@ -594,6 +594,11 @@ function DepartmentDashboard() {
               </CardTitle>
               <CardDescription>平台发布的最新通知</CardDescription>
             </div>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/announcements">
+                更多 <ArrowRight className="h-4 w-4 ml-1" />
+              </Link>
+            </Button>
           </CardHeader>
           <CardContent>
             {announcements.length === 0 ? (
