@@ -1092,6 +1092,120 @@ serve(async (req) => {
         );
       }
 
+      case 'distribute_report': {
+        // 下发报表给供应商
+        const { reportType, reportTypeName, deadline, supplierSelectionType, targetSupplierIds } = params;
+
+        if (!reportType || !reportTypeName || !deadline) {
+          return new Response(
+            JSON.stringify({ error: '请填写完整的报表信息' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 获取目标供应商列表
+        let targetSuppliers: { id: string }[] = [];
+        if (supplierSelectionType === 'all') {
+          const { data: allSuppliers, error: suppliersError } = await supabaseAdmin
+            .from('suppliers')
+            .select('id')
+            .eq('status', 'approved')
+            .eq('is_blacklisted', false);
+          if (suppliersError) throw suppliersError;
+          targetSuppliers = allSuppliers || [];
+        } else if (targetSupplierIds && targetSupplierIds.length > 0) {
+          targetSuppliers = targetSupplierIds.map((id: string) => ({ id }));
+        } else {
+          return new Response(
+            JSON.stringify({ error: '请选择目标供应商' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (targetSuppliers.length === 0) {
+          return new Response(
+            JSON.stringify({ error: '没有符合条件的供应商' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 先创建一个报表模板记录
+        const { data: template, error: templateError } = await supabaseAdmin
+          .from('report_templates')
+          .insert({
+            name: reportTypeName,
+            description: `${reportTypeName} - 管理员下发`,
+            deadline,
+            target_roles: ['supplier'],
+            supplier_selection_type: supplierSelectionType,
+            target_supplier_ids: supplierSelectionType === 'selected' ? targetSupplierIds : null,
+            is_active: true,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (templateError) throw templateError;
+
+        // 为每个目标供应商创建待填写的报表提交记录
+        const submissions = targetSuppliers.map((supplier) => ({
+          template_id: template.id,
+          supplier_id: supplier.id,
+          status: 'assigned', // 使用'assigned'状态表示管理员下发的待填写报表
+          file_url: null,
+          submitted_at: null,
+        }));
+
+        const { error: insertError } = await supabaseAdmin
+          .from('report_submissions')
+          .insert(submissions);
+
+        if (insertError) throw insertError;
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            templateId: template.id,
+            distributedCount: targetSuppliers.length,
+            message: `成功下发给 ${targetSuppliers.length} 家供应商`
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get_distributed_reports': {
+        // 获取已下发的报表列表
+        const { data: distributions, error } = await supabaseAdmin
+          .from('report_submissions')
+          .select(`
+            id,
+            template_id,
+            supplier_id,
+            status,
+            file_url,
+            submitted_at,
+            created_at,
+            report_templates (id, name, deadline, description),
+            suppliers:supplier_id (id, company_name, supplier_type, contact_name)
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const formattedDistributions = distributions?.map(d => ({
+          ...d,
+          template: d.report_templates,
+          supplier: d.suppliers,
+          report_templates: undefined,
+          suppliers: undefined,
+        })) || [];
+
+        return new Response(
+          JSON.stringify({ distributions: formattedDistributions }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: '未知操作' }),

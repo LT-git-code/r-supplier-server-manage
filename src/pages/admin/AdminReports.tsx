@@ -55,6 +55,10 @@ import {
   FileSpreadsheet,
   Eye,
   RefreshCw,
+  Send,
+  Shield,
+  Lock,
+  Calendar,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -125,6 +129,34 @@ interface Statistics {
 
 const COLORS = ['#22c55e', '#f59e0b', '#ef4444', '#3b82f6'];
 
+// 报表类型定义
+const REPORT_TYPES = [
+  {
+    id: 'integrity_agreement',
+    name: '供应商廉洁协议',
+    icon: <Shield className="h-5 w-5 text-blue-500" />,
+    description: '供应商廉洁自律承诺协议',
+  },
+  {
+    id: 'confidentiality_agreement',
+    name: '供应商保密协议',
+    icon: <Lock className="h-5 w-5 text-green-500" />,
+    description: '供应商保密责任协议',
+  },
+  {
+    id: 'related_party_declaration',
+    name: '关联关系申报表',
+    icon: <Users className="h-5 w-5 text-orange-500" />,
+    description: '供应商关联关系申报',
+  },
+  {
+    id: 'periodic_report',
+    name: '年度/季度报表',
+    icon: <Calendar className="h-5 w-5 text-purple-500" />,
+    description: '定期经营数据报表',
+  },
+];
+
 export default function AdminReports() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,6 +197,18 @@ export default function AdminReports() {
   
   // Filter state
   const [submissionFilter, setSubmissionFilter] = useState({ templateId: '', status: '' });
+
+  // Distribute report dialog state
+  const [showDistributeDialog, setShowDistributeDialog] = useState(false);
+  const [distributing, setDistributing] = useState(false);
+  const [distributeForm, setDistributeForm] = useState({
+    reportType: '',
+    deadline: '',
+    supplierSelectionType: 'all',
+  });
+  const [distributeSelectedSuppliers, setDistributeSelectedSuppliers] = useState<string[]>([]);
+  const [showDistributeSupplierDialog, setShowDistributeSupplierDialog] = useState(false);
+  const [distributeSupplierSearch, setDistributeSupplierSearch] = useState('');
 
   useEffect(() => {
     loadData();
@@ -415,6 +459,59 @@ export default function AdminReports() {
     );
   };
 
+  const toggleDistributeSupplierSelection = (supplierId: string) => {
+    setDistributeSelectedSuppliers(prev =>
+      prev.includes(supplierId)
+        ? prev.filter(id => id !== supplierId)
+        : [...prev, supplierId]
+    );
+  };
+
+  const handleDistributeReport = async () => {
+    if (!distributeForm.reportType || !distributeForm.deadline) {
+      toast({ title: '请填写完整信息', variant: 'destructive' });
+      return;
+    }
+
+    if (distributeForm.supplierSelectionType === 'selected' && distributeSelectedSuppliers.length === 0) {
+      toast({ title: '请选择目标供应商', variant: 'destructive' });
+      return;
+    }
+
+    const reportType = REPORT_TYPES.find(t => t.id === distributeForm.reportType);
+    if (!reportType) return;
+
+    try {
+      setDistributing(true);
+      const res = await supabase.functions.invoke('admin-api', {
+        body: {
+          action: 'distribute_report',
+          reportType: distributeForm.reportType,
+          reportTypeName: reportType.name,
+          deadline: distributeForm.deadline,
+          supplierSelectionType: distributeForm.supplierSelectionType,
+          targetSupplierIds: distributeForm.supplierSelectionType === 'selected' ? distributeSelectedSuppliers : null,
+        },
+      });
+      if (res.error) throw res.error;
+      if (res.data.error) throw new Error(res.data.error);
+
+      toast({ 
+        title: '下发成功', 
+        description: res.data.message || `已下发给 ${res.data.distributedCount} 家供应商` 
+      });
+      setShowDistributeDialog(false);
+      setDistributeForm({ reportType: '', deadline: '', supplierSelectionType: 'all' });
+      setDistributeSelectedSuppliers([]);
+      loadData();
+    } catch (error: unknown) {
+      const err = error as Error;
+      toast({ title: '下发失败', description: err.message, variant: 'destructive' });
+    } finally {
+      setDistributing(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'approved':
@@ -423,6 +520,8 @@ export default function AdminReports() {
         return <Badge variant="outline" className="text-yellow-600 border-yellow-600"><Clock className="h-3 w-3 mr-1" />待审核</Badge>;
       case 'rejected':
         return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />已驳回</Badge>;
+      case 'assigned':
+        return <Badge variant="outline" className="text-blue-600 border-blue-600"><Send className="h-3 w-3 mr-1" />待填写</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -432,6 +531,12 @@ export default function AdminReports() {
     (s.company_name || '').includes(supplierSearch) ||
     (s.unified_social_credit_code || '').includes(supplierSearch) ||
     (s.contact_name || '').includes(supplierSearch)
+  );
+
+  const filteredDistributeSuppliers = allSuppliers.filter(s =>
+    (s.company_name || '').includes(distributeSupplierSearch) ||
+    (s.unified_social_credit_code || '').includes(distributeSupplierSearch) ||
+    (s.contact_name || '').includes(distributeSupplierSearch)
   );
 
   if (loading) {
@@ -457,10 +562,16 @@ export default function AdminReports() {
           <h1 className="text-2xl font-bold">报表管理</h1>
           <p className="text-muted-foreground">平台数据统计分析中心，为决策层提供数据支持</p>
         </div>
-        <Button onClick={loadData} variant="outline" size="sm">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          刷新数据
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowDistributeDialog(true)} variant="default">
+            <Send className="h-4 w-4 mr-2" />
+            下发报表
+          </Button>
+          <Button onClick={loadData} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            刷新数据
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1095,6 +1206,196 @@ export default function AdminReports() {
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               确认
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 下发报表对话框 */}
+      <Dialog open={showDistributeDialog} onOpenChange={setShowDistributeDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5" />
+              下发报表
+            </DialogTitle>
+            <DialogDescription>
+              选择报表类型并设置截止时间，下发给指定供应商
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            {/* 报表类型选择 */}
+            <div className="space-y-3">
+              <Label>报表类型 *</Label>
+              <Select 
+                value={distributeForm.reportType} 
+                onValueChange={v => setDistributeForm(prev => ({ ...prev, reportType: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="请选择报表类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  {REPORT_TYPES.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      <div className="flex items-center gap-2">
+                        {type.icon}
+                        <span>{type.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {distributeForm.reportType && (
+                <div className="p-3 bg-muted rounded-lg">
+                  <div className="flex items-start gap-3">
+                    {REPORT_TYPES.find(t => t.id === distributeForm.reportType)?.icon}
+                    <div>
+                      <p className="font-medium">
+                        {REPORT_TYPES.find(t => t.id === distributeForm.reportType)?.name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {REPORT_TYPES.find(t => t.id === distributeForm.reportType)?.description}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 截止时间 */}
+            <div className="space-y-2">
+              <Label>截止时间 *</Label>
+              <Input
+                type="date"
+                value={distributeForm.deadline}
+                onChange={e => setDistributeForm(prev => ({ ...prev, deadline: e.target.value }))}
+                min={format(new Date(), 'yyyy-MM-dd')}
+              />
+              <p className="text-xs text-muted-foreground">
+                供应商需要在截止时间前完成报表提交
+              </p>
+            </div>
+
+            {/* 目标供应商 */}
+            <div className="space-y-2">
+              <Label>目标供应商</Label>
+              <Select
+                value={distributeForm.supplierSelectionType}
+                onValueChange={v => setDistributeForm(prev => ({ ...prev, supplierSelectionType: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部已审核供应商 ({allSuppliers.length} 家)</SelectItem>
+                  <SelectItem value="selected">指定供应商</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {distributeForm.supplierSelectionType === 'selected' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>已选择供应商 ({distributeSelectedSuppliers.length})</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDistributeSupplierDialog(true)}
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    选择供应商
+                  </Button>
+                </div>
+                {distributeSelectedSuppliers.length > 0 && (
+                  <div className="border rounded-md p-3 max-h-32 overflow-y-auto">
+                    <div className="flex flex-wrap gap-2">
+                      {distributeSelectedSuppliers.map(id => {
+                        const supplier = allSuppliers.find(s => s.id === id);
+                        return supplier ? (
+                          <Badge key={id} variant="secondary" className="gap-1">
+                            {supplier.company_name}
+                            <button
+                              type="button"
+                              onClick={() => toggleDistributeSupplierSelection(id)}
+                              className="ml-1 hover:text-destructive"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDistributeDialog(false)}>取消</Button>
+            <Button 
+              onClick={handleDistributeReport} 
+              disabled={distributing || !distributeForm.reportType || !distributeForm.deadline}
+            >
+              {distributing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              确认下发
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 下发报表-供应商选择对话框 */}
+      <Dialog open={showDistributeSupplierDialog} onOpenChange={setShowDistributeSupplierDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>选择供应商</DialogTitle>
+            <DialogDescription>选择需要下发报表的供应商</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              placeholder="搜索供应商名称、信用代码、联系人..."
+              value={distributeSupplierSearch}
+              onChange={e => setDistributeSupplierSearch(e.target.value)}
+            />
+            <div className="border rounded-md max-h-[400px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead>供应商名称</TableHead>
+                    <TableHead>类型</TableHead>
+                    <TableHead>联系人</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredDistributeSuppliers.map(supplier => (
+                    <TableRow
+                      key={supplier.id}
+                      className="cursor-pointer"
+                      onClick={() => toggleDistributeSupplierSelection(supplier.id)}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={distributeSelectedSuppliers.includes(supplier.id)}
+                          onCheckedChange={() => toggleDistributeSupplierSelection(supplier.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{supplier.company_name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {supplier.supplier_type === 'enterprise' ? '企业' :
+                           supplier.supplier_type === 'overseas' ? '海外' : '个人'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{supplier.contact_name || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDistributeSupplierDialog(false)}>确定</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
