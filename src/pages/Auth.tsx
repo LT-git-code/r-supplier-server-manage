@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Building2, AlertCircle, Users, ShieldCheck } from 'lucide-react';
 import { LoginAnnouncements } from '@/components/auth/LoginAnnouncements';
+import { ComplaintDialog } from '@/components/auth/ComplaintDialog';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('请输入有效的邮箱地址');
@@ -371,8 +372,8 @@ export default function Auth() {
             </CardContent>
           </Tabs>
           
-          <CardFooter className="flex flex-col gap-2 text-center text-sm text-muted-foreground pt-0">
-            <p>
+          <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground pt-0">
+            <p className="text-left w-full">
               {activeTab === 'login' ? (
                 <>
                   还没有账号？{' '}
@@ -400,9 +401,12 @@ export default function Auth() {
           </CardFooter>
         </Card>
         
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          © 2024 供应商管理平台 · 版权所有
-        </p>
+        <div className="flex items-center justify-between mt-6">
+          <p className="text-xs text-muted-foreground">
+            © 2024 供应商管理平台 · 版权所有
+          </p>
+          <ComplaintDialog />
+        </div>
         </div>
       </div>
     </div>

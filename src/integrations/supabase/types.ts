@@ -122,6 +122,10 @@ export type Database = {
       complaints: {
         Row: {
           attachments: string[] | null
+          company_name: string | null
+          complaint_type: string | null
+          contact_name: string | null
+          contact_phone: string | null
           content: string
           created_at: string
           id: string
@@ -135,6 +139,10 @@ export type Database = {
         }
         Insert: {
           attachments?: string[] | null
+          company_name?: string | null
+          complaint_type?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
           content: string
           created_at?: string
           id?: string
@@ -148,6 +156,10 @@ export type Database = {
         }
         Update: {
           attachments?: string[] | null
+          company_name?: string | null
+          complaint_type?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
           content?: string
           created_at?: string
           id?: string

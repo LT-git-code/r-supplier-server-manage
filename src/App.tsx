@@ -34,6 +34,7 @@ import DeptRoles from "./pages/dept/DeptRoles";
 import Profile from "./pages/Profile";
 import Announcements from "./pages/Announcements";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
+import AdminComplaints from "./pages/admin/AdminComplaints";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -80,6 +81,7 @@ const App = () => (
               <Route path="/admin/services" element={<AdminServices />} />
               <Route path="/admin/reports" element={<AdminReports />} />
               <Route path="/admin/announcements" element={<AdminAnnouncements />} />
+              <Route path="/admin/complaints" element={<AdminComplaints />} />
               <Route path="/admin/roles" element={<DeptRoles />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
               <Route path="/admin/seed-data" element={<SeedTestData />} />
