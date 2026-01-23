@@ -129,14 +129,41 @@ serve(async (req) => {
           );
         }
 
-        // 查找该手机号对应的用户
+        // 查找该手机号对应的用户 - 先从profiles查找
+        let userId: string | null = null;
+        
         const { data: profile } = await supabaseAdmin
           .from('profiles')
           .select('user_id')
           .eq('phone', phone)
           .maybeSingle();
 
-        if (!profile) {
+        if (profile) {
+          userId = profile.user_id;
+        } else {
+          // 如果profiles中没有，检查是否通过手机号注册（临时邮箱格式）
+          const tempEmail = `${phone}@phone.supplier.local`;
+          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+          const existingAuthUser = existingUsers?.users?.find(u => u.email === tempEmail);
+          
+          if (existingAuthUser) {
+            userId = existingAuthUser.id;
+            // 修复profile - 确保phone字段被正确设置
+            await supabaseAdmin
+              .from('profiles')
+              .upsert({
+                user_id: existingAuthUser.id,
+                phone: phone,
+                email: tempEmail
+              }, { 
+                onConflict: 'user_id',
+                ignoreDuplicates: false 
+              });
+            console.log(`Fixed profile phone for user ${existingAuthUser.id}`);
+          }
+        }
+
+        if (!userId) {
           return new Response(
             JSON.stringify({ error: '该手机号未注册' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -147,7 +174,7 @@ serve(async (req) => {
         const { data: supplierRole } = await supabaseAdmin
           .from('user_roles')
           .select('role')
-          .eq('user_id', profile.user_id)
+          .eq('user_id', userId)
           .eq('role', 'supplier')
           .maybeSingle();
 
@@ -189,14 +216,29 @@ serve(async (req) => {
           );
         }
 
-        // 验证成功，获取用户信息
+        // 验证成功，获取用户信息 - 先从profiles查找
+        let userId: string | null = null;
+        
         const { data: profile } = await supabaseAdmin
           .from('profiles')
           .select('user_id')
           .eq('phone', phone)
-          .single();
+          .maybeSingle();
 
-        if (!profile) {
+        if (profile) {
+          userId = profile.user_id;
+        } else {
+          // 如果profiles中没有，通过临时邮箱格式查找
+          const tempEmail = `${phone}@phone.supplier.local`;
+          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+          const existingAuthUser = existingUsers?.users?.find(u => u.email === tempEmail);
+          
+          if (existingAuthUser) {
+            userId = existingAuthUser.id;
+          }
+        }
+
+        if (!userId) {
           return new Response(
             JSON.stringify({ error: '用户不存在' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -204,7 +246,7 @@ serve(async (req) => {
         }
 
         // 获取用户邮箱
-        const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(profile.user_id);
+        const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(userId);
         if (!user || !user.email) {
           return new Response(
             JSON.stringify({ error: '无法获取用户信息' }),
@@ -217,7 +259,7 @@ serve(async (req) => {
         
         // 更新用户密码为临时密码
         const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-          profile.user_id,
+          userId,
           { password: tempPassword }
         );
 
