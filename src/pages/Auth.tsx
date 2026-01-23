@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Building2, AlertCircle, Users, ShieldCheck } from 'lucide-react';
+import { LoginAnnouncements } from '@/components/auth/LoginAnnouncements';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('请输入有效的邮箱地址');
@@ -281,7 +282,14 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-4xl flex gap-6 items-start">
+        {/* 左侧公告栏 */}
+        <div className="hidden md:block w-80 shrink-0">
+          <LoginAnnouncements />
+        </div>
+        
+        {/* 右侧登录/注册表单 */}
+        <div className="flex-1 max-w-md mx-auto">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center gap-3 mb-2">
@@ -395,6 +403,7 @@ export default function Auth() {
         <p className="text-center text-xs text-muted-foreground mt-6">
           © 2024 供应商管理平台 · 版权所有
         </p>
+        </div>
       </div>
     </div>
   );
