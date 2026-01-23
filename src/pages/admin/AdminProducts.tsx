@@ -38,7 +38,11 @@ import {
   EyeOff,
   Building2,
   AlertCircle,
+  Download,
+  FolderTree,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import ProductCategoryManagement from '@/components/admin/ProductCategoryManagement';
 
 interface Product {
   id: string;
@@ -86,6 +90,8 @@ export default function AdminProducts() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -136,6 +142,59 @@ export default function AdminProducts() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const { data, error } = await supabase.functions.invoke('admin-api', {
+        body: { action: 'export_products', status: activeTab === 'all' ? null : activeTab },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      if (!data.data || data.data.length === 0) {
+        toast({ title: '没有可导出的数据' });
+        return;
+      }
+
+      // 创建Excel工作簿
+      const ws = XLSX.utils.json_to_sheet(data.data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '产品列表');
+
+      // 设置列宽
+      ws['!cols'] = [
+        { wch: 30 }, // 产品名称
+        { wch: 15 }, // 产品编码
+        { wch: 25 }, // 供应商名称
+        { wch: 10 }, // 供应商类型
+        { wch: 15 }, // 产品分类
+        { wch: 12 }, // 价格
+        { wch: 8 },  // 单位
+        { wch: 12 }, // 最小订购量
+        { wch: 12 }, // 交货周期
+        { wch: 10 }, // 状态
+        { wch: 40 }, // 产品描述
+        { wch: 30 }, // 规格参数
+        { wch: 20 }, // 创建时间
+      ];
+
+      // 导出文件
+      const fileName = `产品列表_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      toast({ title: '导出成功' });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '导出失败',
+        description: error.message,
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const filteredProducts = products.filter(product => {
     const query = searchQuery.toLowerCase();
     const productName = product.name?.toLowerCase() || '';
@@ -156,10 +215,24 @@ export default function AdminProducts() {
           <h1 className="text-2xl font-bold">产品管理</h1>
           <p className="text-muted-foreground">管理平台所有审核通过供应商的产品</p>
         </div>
-        <Button variant="outline" onClick={fetchProducts} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          刷新
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setCategoryOpen(true)}>
+            <FolderTree className="h-4 w-4 mr-2" />
+            分类管理
+          </Button>
+          <Button variant="outline" onClick={handleExport} disabled={exporting || loading}>
+            {exporting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            批量导出
+          </Button>
+          <Button variant="outline" onClick={fetchProducts} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            刷新
+          </Button>
+        </div>
       </div>
 
       {/* 搜索框 */}
@@ -394,6 +467,9 @@ export default function AdminProducts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 产品分类管理 */}
+      <ProductCategoryManagement open={categoryOpen} onOpenChange={setCategoryOpen} />
     </div>
   );
 }

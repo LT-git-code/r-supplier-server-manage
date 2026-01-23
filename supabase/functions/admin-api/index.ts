@@ -1206,6 +1206,179 @@ serve(async (req) => {
         );
       }
 
+      // ========== 产品分类管理 ==========
+      case 'list_product_categories': {
+        const { data: categories, error } = await supabaseAdmin
+          .from('product_categories')
+          .select('*')
+          .order('sort_order')
+          .order('created_at');
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ categories: categories || [] }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'create_product_category': {
+        const { name, code, parent_id, level, sort_order } = params;
+
+        if (!name) {
+          return new Response(
+            JSON.stringify({ error: '分类名称不能为空' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { data: category, error } = await supabaseAdmin
+          .from('product_categories')
+          .insert({
+            name,
+            code: code || null,
+            parent_id: parent_id || null,
+            level: level || 1,
+            sort_order: sort_order || 0,
+            is_active: true,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ success: true, category }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'update_product_category': {
+        const { categoryId, name, code, parent_id, level, sort_order, is_active } = params;
+
+        const updateData: Record<string, unknown> = {};
+        if (name !== undefined) updateData.name = name;
+        if (code !== undefined) updateData.code = code;
+        if (parent_id !== undefined) updateData.parent_id = parent_id;
+        if (level !== undefined) updateData.level = level;
+        if (sort_order !== undefined) updateData.sort_order = sort_order;
+        if (is_active !== undefined) updateData.is_active = is_active;
+
+        const { data: category, error } = await supabaseAdmin
+          .from('product_categories')
+          .update(updateData)
+          .eq('id', categoryId)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ success: true, category }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'delete_product_category': {
+        const { categoryId } = params;
+
+        // 检查是否有子分类
+        const { data: children } = await supabaseAdmin
+          .from('product_categories')
+          .select('id')
+          .eq('parent_id', categoryId)
+          .limit(1);
+
+        if (children && children.length > 0) {
+          return new Response(
+            JSON.stringify({ error: '该分类下有子分类，无法删除' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 检查是否有产品使用该分类
+        const { data: products } = await supabaseAdmin
+          .from('products')
+          .select('id')
+          .eq('category_id', categoryId)
+          .limit(1);
+
+        if (products && products.length > 0) {
+          return new Response(
+            JSON.stringify({ error: '该分类下有产品，无法删除' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error } = await supabaseAdmin
+          .from('product_categories')
+          .delete()
+          .eq('id', categoryId);
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // ========== 产品导出 ==========
+      case 'export_products': {
+        const { status } = params;
+
+        // 获取所有产品数据用于导出
+        let query = supabaseAdmin
+          .from('products')
+          .select(`
+            *,
+            suppliers!inner (
+              id,
+              company_name,
+              contact_name,
+              supplier_type,
+              status
+            ),
+            product_categories (
+              id,
+              name
+            )
+          `)
+          .eq('suppliers.status', 'approved')
+          .order('created_at', { ascending: false });
+
+        if (status && status !== 'all') {
+          query = query.eq('status', status);
+        }
+
+        const { data: products, error } = await query;
+        if (error) throw error;
+
+        // 格式化导出数据
+        const exportData = products?.map(p => ({
+          产品名称: p.name || '',
+          产品编码: p.code || '',
+          供应商名称: p.suppliers?.company_name || p.suppliers?.contact_name || '',
+          供应商类型: p.suppliers?.supplier_type === 'enterprise' ? '企业' : 
+                      p.suppliers?.supplier_type === 'individual' ? '个人' : '境外',
+          产品分类: p.product_categories?.name || '',
+          价格: p.price || '',
+          单位: p.unit || '',
+          最小订购量: p.min_order_quantity || '',
+          交货周期天数: p.lead_time_days || '',
+          状态: p.status === 'active' ? '上架中' : 
+                p.status === 'inactive' ? '已下架' : '待审核',
+          产品描述: p.description || '',
+          规格参数: p.specifications || '',
+          创建时间: p.created_at ? new Date(p.created_at).toLocaleString('zh-CN') : '',
+        })) || [];
+
+        return new Response(
+          JSON.stringify({ success: true, data: exportData }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: '未知操作' }),
