@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Dialog,
   DialogContent,
@@ -93,27 +94,62 @@ export default function SupplierImportDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDownloadTemplate = () => {
-    // 创建CSV模板内容
-    const BOM = '\uFEFF'; // UTF-8 BOM for Excel compatibility
-    const headers = TEMPLATE_HEADERS.join(',');
-    const exampleRows = [
-      '示例公司A,国内公司,张三,13800138000,李四,推荐供应商',
-      '示例公司B,海外公司,John,+1-555-1234,王五,良好供应商',
-      '示例个人C,个人,赵六,13900139000,李四,良好供应商',
+    // 创建Excel模板
+    const templateData = [
+      TEMPLATE_HEADERS,
+      ['示例公司A', '国内公司', '张三', '13800138000', '李四', '推荐供应商'],
+      ['示例公司B', '海外公司', 'John', '+1-555-1234', '王五', '良好供应商'],
+      ['示例个人C', '个人', '赵六', '13900139000', '李四', '良好供应商'],
     ];
-    const content = BOM + headers + '\n' + exampleRows.join('\n');
     
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '供应商导入模板.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // 创建工作簿和工作表
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+    
+    // 设置列宽
+    ws['!cols'] = [
+      { wch: 20 }, // 供应商名称
+      { wch: 12 }, // 供应商类别
+      { wch: 10 }, // 联系人
+      { wch: 15 }, // 联系方式
+      { wch: 12 }, // 当前采购员
+      { wch: 14 }, // 合作情况标签
+    ];
+    
+    XLSX.utils.book_append_sheet(wb, ws, '供应商导入模板');
+    
+    // 导出Excel文件
+    XLSX.writeFile(wb, '供应商导入模板.xlsx');
     
     toast.success('模板下载成功');
+  };
+
+  const parseExcelFile = (file: File): Promise<string[][]> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          
+          // 读取第一个工作表
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          // 转换为二维数组
+          const jsonData = XLSX.utils.sheet_to_json<string[]>(worksheet, { 
+            header: 1,
+            defval: '',
+          });
+          
+          resolve(jsonData as string[][]);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsArrayBuffer(file);
+    });
   };
 
   const parseCSV = (text: string): string[][] => {
@@ -154,9 +190,20 @@ export default function SupplierImportDialog({
     setProgress(10);
 
     try {
-      const text = await file.text();
-      const rows = parseCSV(text);
+      let rows: string[][];
       
+      // 根据文件类型选择解析方式
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        rows = await parseExcelFile(file);
+      } else if (file.name.endsWith('.csv')) {
+        const text = await file.text();
+        rows = parseCSV(text);
+      } else {
+        throw new Error('不支持的文件格式');
+      }
+      
+      // 过滤空行
+      rows = rows.filter(row => row.some(cell => cell && String(cell).trim()));
       if (rows.length < 2) {
         throw new Error('文件内容为空或格式不正确');
       }
@@ -164,7 +211,7 @@ export default function SupplierImportDialog({
       setProgress(30);
 
       // 验证表头
-      const headers = rows[0];
+      const headers = rows[0].map(h => String(h).trim());
       const missingHeaders = TEMPLATE_HEADERS.filter(h => !headers.includes(h));
       if (missingHeaders.length > 0) {
         throw new Error(`缺少必要列: ${missingHeaders.join(', ')}`);
@@ -183,15 +230,16 @@ export default function SupplierImportDialog({
       const dataRows = rows.slice(1);
       
       for (const row of dataRows) {
-        if (row.every(cell => !cell.trim())) continue; // 跳过空行
+        const rowStr = row.map(cell => String(cell || '').trim());
+        if (rowStr.every(cell => !cell)) continue; // 跳过空行
         
         suppliers.push({
-          company_name: row[colIndex['供应商名称']] || '',
-          supplier_type: row[colIndex['供应商类别']] || '',
-          contact_name: row[colIndex['联系人']] || '',
-          contact_phone: row[colIndex['联系方式']] || '',
-          buyer_name: row[colIndex['当前采购员']] || '',
-          cooperation_tag: row[colIndex['合作情况标签']] || '',
+          company_name: rowStr[colIndex['供应商名称']] || '',
+          supplier_type: rowStr[colIndex['供应商类别']] || '',
+          contact_name: rowStr[colIndex['联系人']] || '',
+          contact_phone: rowStr[colIndex['联系方式']] || '',
+          buyer_name: rowStr[colIndex['当前采购员']] || '',
+          cooperation_tag: rowStr[colIndex['合作情况标签']] || '',
         });
       }
 
