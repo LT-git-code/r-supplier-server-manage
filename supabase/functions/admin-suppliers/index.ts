@@ -115,6 +115,9 @@ serve(async (req) => {
         // 拉黑筛选
         if (blacklistFilter === 'blacklisted') {
           query = query.eq('is_blacklisted', true);
+        } else if (blacklistFilter === 'blacklisted_or_objection') {
+          // 拉黑异议库：筛选拉黑或有异议的供应商
+          query = query.or('is_blacklisted.eq.true,has_objection.eq.true');
         } else if (blacklistFilter === 'normal') {
           query = query.eq('is_blacklisted', false);
         }
@@ -555,6 +558,82 @@ serve(async (req) => {
           target_type: 'supplier',
           target_id: supplierId,
           new_data: { is_recommended: false },
+        });
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'add_objection': {
+        const { supplierId, reason } = params;
+        
+        if (!supplierId) {
+          return new Response(
+            JSON.stringify({ error: '缺少供应商ID' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateError } = await supabaseAdmin
+          .from('suppliers')
+          .update({
+            has_objection: true,
+            objection_at: new Date().toISOString(),
+            objection_by: user.id,
+            objection_reason: reason || '存在异议',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', supplierId);
+
+        if (updateError) throw updateError;
+
+        // 记录操作日志
+        await supabaseAdmin.from('operation_logs').insert({
+          user_id: user.id,
+          action: 'add_objection_supplier',
+          target_type: 'supplier',
+          target_id: supplierId,
+          new_data: { has_objection: true, reason },
+        });
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'remove_objection': {
+        const { supplierId } = params;
+        
+        if (!supplierId) {
+          return new Response(
+            JSON.stringify({ error: '缺少供应商ID' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateError } = await supabaseAdmin
+          .from('suppliers')
+          .update({
+            has_objection: false,
+            objection_at: null,
+            objection_by: null,
+            objection_reason: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', supplierId);
+
+        if (updateError) throw updateError;
+
+        // 记录操作日志
+        await supabaseAdmin.from('operation_logs').insert({
+          user_id: user.id,
+          action: 'remove_objection_supplier',
+          target_type: 'supplier',
+          target_id: supplierId,
+          new_data: { has_objection: false },
         });
 
         return new Response(

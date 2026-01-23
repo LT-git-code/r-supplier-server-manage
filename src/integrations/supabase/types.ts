@@ -982,6 +982,7 @@ export type Database = {
           created_at: string
           employee_count: number | null
           establishment_date: string | null
+          has_objection: boolean
           id: string
           id_card_back_url: string | null
           id_card_front_url: string | null
@@ -990,6 +991,9 @@ export type Database = {
           is_recommended: boolean
           legal_representative: string | null
           main_products: string | null
+          objection_at: string | null
+          objection_by: string | null
+          objection_reason: string | null
           production_capacity: string | null
           province: string | null
           recommended_at: string | null
@@ -1025,6 +1029,7 @@ export type Database = {
           created_at?: string
           employee_count?: number | null
           establishment_date?: string | null
+          has_objection?: boolean
           id?: string
           id_card_back_url?: string | null
           id_card_front_url?: string | null
@@ -1033,6 +1038,9 @@ export type Database = {
           is_recommended?: boolean
           legal_representative?: string | null
           main_products?: string | null
+          objection_at?: string | null
+          objection_by?: string | null
+          objection_reason?: string | null
           production_capacity?: string | null
           province?: string | null
           recommended_at?: string | null
@@ -1068,6 +1076,7 @@ export type Database = {
           created_at?: string
           employee_count?: number | null
           establishment_date?: string | null
+          has_objection?: boolean
           id?: string
           id_card_back_url?: string | null
           id_card_front_url?: string | null
@@ -1076,6 +1085,9 @@ export type Database = {
           is_recommended?: boolean
           legal_representative?: string | null
           main_products?: string | null
+          objection_at?: string | null
+          objection_by?: string | null
+          objection_reason?: string | null
           production_capacity?: string | null
           province?: string | null
           recommended_at?: string | null
