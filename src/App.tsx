@@ -32,6 +32,8 @@ import DeptProjects from "./pages/dept/DeptProjects";
 import DeptServices from "./pages/dept/DeptServices";
 import DeptRoles from "./pages/dept/DeptRoles";
 import Profile from "./pages/Profile";
+import Announcements from "./pages/Announcements";
+import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -77,10 +79,13 @@ const App = () => (
               <Route path="/admin/projects" element={<AdminProjects />} />
               <Route path="/admin/services" element={<AdminServices />} />
               <Route path="/admin/reports" element={<AdminReports />} />
-              <Route path="/admin/announcements" element={<div className="p-4">公告管理（开发中）</div>} />
+              <Route path="/admin/announcements" element={<AdminAnnouncements />} />
               <Route path="/admin/roles" element={<DeptRoles />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
               <Route path="/admin/seed-data" element={<SeedTestData />} />
+              
+              {/* 公告中心 */}
+              <Route path="/announcements" element={<Announcements />} />
               
               {/* 个人设置 */}
               <Route path="/profile" element={<Profile />} />

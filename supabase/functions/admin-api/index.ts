@@ -506,6 +506,99 @@ serve(async (req) => {
         );
       }
 
+      case 'list_announcements': {
+        const { data, error } = await supabaseAdmin
+          .from('announcements')
+          .select('id, title, content, target_roles, is_published, published_at, created_at')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify(data),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'create_announcement': {
+        const { title, content, target_roles } = params;
+        const { data, error } = await supabaseAdmin
+          .from('announcements')
+          .insert({
+            title,
+            content,
+            target_roles,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ success: true, announcement: data }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'update_announcement': {
+        const { id, title, content, target_roles } = params;
+        const { data, error } = await supabaseAdmin
+          .from('announcements')
+          .update({
+            title,
+            content,
+            target_roles,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ success: true, announcement: data }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'toggle_announcement_publish': {
+        const { id, is_published } = params;
+        const updateData: Record<string, unknown> = {
+          is_published,
+          updated_at: new Date().toISOString(),
+        };
+        
+        if (is_published) {
+          updateData.published_at = new Date().toISOString();
+        }
+
+        const { data, error } = await supabaseAdmin
+          .from('announcements')
+          .update(updateData)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ success: true, announcement: data }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'delete_announcement': {
+        const { id } = params;
+        const { error } = await supabaseAdmin
+          .from('announcements')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       case 'get_recent_audits': {
         const { limit = 5 } = params;
         const { data, error } = await supabaseAdmin
