@@ -461,6 +461,63 @@ serve(async (req) => {
         });
       }
 
+      case "get_distributed_reports": {
+        // 获取管理员下发的待填写报表（status = 'assigned'）
+        const { data, error } = await supabase
+          .from("report_submissions")
+          .select("*, report_templates(id, name, deadline, description, file_url)")
+          .eq("supplier_id", supplierId)
+          .eq("status", "assigned")
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        return new Response(JSON.stringify(data), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "submit_distributed_report": {
+        // 提交管理员下发的报表
+        const { submissionId, fileUrl } = params;
+        
+        if (!submissionId || !fileUrl) {
+          return new Response(JSON.stringify({ error: "Missing required parameters" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // 验证该提交记录属于当前供应商
+        const { data: existing, error: checkError } = await supabase
+          .from("report_submissions")
+          .select("id")
+          .eq("id", submissionId)
+          .eq("supplier_id", supplierId)
+          .single();
+
+        if (checkError || !existing) {
+          return new Response(JSON.stringify({ error: "Report not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { error: updateError } = await supabase
+          .from("report_submissions")
+          .update({
+            file_url: fileUrl,
+            status: "pending", // 更改为pending表示已提交待审核
+            submitted_at: new Date().toISOString(),
+          })
+          .eq("id", submissionId)
+          .eq("supplier_id", supplierId);
+
+        if (updateError) throw updateError;
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       case "submit_report": {
         const { templateId, fileUrl } = params;
         const { data, error } = await supabase

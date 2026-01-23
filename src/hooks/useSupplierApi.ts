@@ -50,6 +50,8 @@ export function useSupplierApi() {
     // Reports
     getReportTemplates: () => callApi('get_report_templates'),
     getReportSubmissions: () => callApi('get_report_submissions'),
+    getDistributedReports: () => callApi('get_distributed_reports'),
     submitReport: (templateId: string, fileUrl: string) => callApi('submit_report', { templateId, fileUrl }),
+    submitDistributedReport: (submissionId: string, fileUrl: string) => callApi('submit_distributed_report', { submissionId, fileUrl }),
   };
 }
