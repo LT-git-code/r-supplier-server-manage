@@ -567,14 +567,32 @@ serve(async (req) => {
           );
         }
 
-        // 更新 profile 添加手机号
-        const { error: profileError } = await supabaseAdmin
-          .from('profiles')
-          .update({ phone: phone })
-          .eq('user_id', newUser.user.id);
+        // 等待profile被创建（由trigger创建），然后更新手机号
+        // 使用upsert确保手机号被保存
+        let profileUpdated = false;
+        for (let i = 0; i < 5; i++) {
+          const { error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .upsert({
+              user_id: newUser.user.id,
+              phone: phone,
+              email: tempEmail
+            }, { 
+              onConflict: 'user_id',
+              ignoreDuplicates: false 
+            });
 
-        if (profileError) {
-          console.error('Update profile error:', profileError);
+          if (!profileError) {
+            profileUpdated = true;
+            break;
+          }
+          console.log(`Profile update attempt ${i + 1} failed:`, profileError);
+          // 等待100ms后重试
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        if (!profileUpdated) {
+          console.error('Failed to update profile after retries');
         }
 
         // 添加供应商角色
