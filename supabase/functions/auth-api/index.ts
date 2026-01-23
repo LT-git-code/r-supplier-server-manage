@@ -6,9 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// 存储验证码（实际生产环境应使用 Redis 等）
-const verificationCodes = new Map<string, { code: string; expiresAt: number; type: 'email' | 'phone' }>();
-
 // 生成6位数字验证码
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -22,6 +19,90 @@ function isValidPhone(phone: string): boolean {
 // 验证邮箱格式
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// 保存验证码到数据库
+async function saveVerificationCode(
+  supabaseAdmin: any,
+  type: string,
+  phone?: string,
+  email?: string
+): Promise<string> {
+  const code = generateCode();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10分钟有效期
+
+  // 先删除该手机号/邮箱相同类型的旧验证码
+  if (phone) {
+    await supabaseAdmin
+      .from('verification_codes')
+      .delete()
+      .eq('phone', phone)
+      .eq('type', type);
+  }
+  if (email) {
+    await supabaseAdmin
+      .from('verification_codes')
+      .delete()
+      .eq('email', email)
+      .eq('type', type);
+  }
+
+  // 插入新验证码
+  const { error } = await supabaseAdmin
+    .from('verification_codes')
+    .insert({
+      phone: phone || null,
+      email: email || null,
+      code,
+      type,
+      expires_at: expiresAt,
+      used: false,
+    });
+
+  if (error) {
+    console.error('Save verification code error:', error);
+    throw new Error('保存验证码失败');
+  }
+
+  return code;
+}
+
+// 验证验证码
+async function verifyCode(
+  supabaseAdmin: any,
+  type: string,
+  code: string,
+  phone?: string,
+  email?: string
+): Promise<boolean> {
+  let query = supabaseAdmin
+    .from('verification_codes')
+    .select('*')
+    .eq('type', type)
+    .eq('code', code)
+    .eq('used', false)
+    .gt('expires_at', new Date().toISOString());
+
+  if (phone) {
+    query = query.eq('phone', phone);
+  }
+  if (email) {
+    query = query.eq('email', email);
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error || !data) {
+    return false;
+  }
+
+  // 标记为已使用
+  await supabaseAdmin
+    .from('verification_codes')
+    .update({ used: true })
+    .eq('id', data.id);
+
+  return true;
 }
 
 serve(async (req) => {
@@ -77,19 +158,14 @@ serve(async (req) => {
           );
         }
 
-        const code = generateCode();
-        const expiresAt = Date.now() + 10 * 60 * 1000; // 10分钟有效期
-        verificationCodes.set(`login_phone_${phone}`, { code, expiresAt, type: 'phone' });
-
-        // 实际生产环境应该通过短信服务发送验证码
+        const code = await saveVerificationCode(supabaseAdmin, 'login_phone', phone);
         console.log(`Login phone verification code for ${phone}: ${code}`);
 
         return new Response(
           JSON.stringify({ 
             success: true,
             message: '验证码已发送',
-            // 开发环境返回验证码
-            code: code
+            code: code // 开发环境返回验证码
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -105,25 +181,10 @@ serve(async (req) => {
         }
 
         // 验证验证码
-        const stored = verificationCodes.get(`login_phone_${phone}`);
-        if (!stored) {
+        const isValid = await verifyCode(supabaseAdmin, 'login_phone', code, phone);
+        if (!isValid) {
           return new Response(
             JSON.stringify({ error: '验证码不存在或已过期，请重新获取' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (Date.now() > stored.expiresAt) {
-          verificationCodes.delete(`login_phone_${phone}`);
-          return new Response(
-            JSON.stringify({ error: '验证码已过期，请重新获取' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (stored.code !== code) {
-          return new Response(
-            JSON.stringify({ error: '验证码错误' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -168,9 +229,6 @@ serve(async (req) => {
           );
         }
 
-        // 删除验证码
-        verificationCodes.delete(`login_phone_${phone}`);
-
         return new Response(
           JSON.stringify({ 
             success: true,
@@ -205,10 +263,7 @@ serve(async (req) => {
           );
         }
 
-        const code = generateCode();
-        const expiresAt = Date.now() + 10 * 60 * 1000;
-        verificationCodes.set(`reset_phone_${phone}`, { code, expiresAt, type: 'phone' });
-
+        const code = await saveVerificationCode(supabaseAdmin, 'reset_phone', phone);
         console.log(`Reset password phone code for ${phone}: ${code}`);
 
         return new Response(
@@ -241,10 +296,7 @@ serve(async (req) => {
           );
         }
 
-        const code = generateCode();
-        const expiresAt = Date.now() + 10 * 60 * 1000;
-        verificationCodes.set(`reset_email_${email}`, { code, expiresAt, type: 'email' });
-
+        const code = await saveVerificationCode(supabaseAdmin, 'reset_email', undefined, email);
         console.log(`Reset password email code for ${email}: ${code}`);
 
         return new Response(
@@ -275,18 +327,10 @@ serve(async (req) => {
         }
 
         // 验证验证码
-        const stored = verificationCodes.get(`reset_phone_${phone}`);
-        if (!stored || Date.now() > stored.expiresAt) {
-          verificationCodes.delete(`reset_phone_${phone}`);
+        const isValid = await verifyCode(supabaseAdmin, 'reset_phone', code, phone);
+        if (!isValid) {
           return new Response(
             JSON.stringify({ error: '验证码不存在或已过期' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (stored.code !== code) {
-          return new Response(
-            JSON.stringify({ error: '验证码错误' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -313,8 +357,6 @@ serve(async (req) => {
 
         if (updateError) throw updateError;
 
-        verificationCodes.delete(`reset_phone_${phone}`);
-
         return new Response(
           JSON.stringify({ success: true, message: '密码重置成功' }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -338,18 +380,10 @@ serve(async (req) => {
         }
 
         // 验证验证码
-        const stored = verificationCodes.get(`reset_email_${email}`);
-        if (!stored || Date.now() > stored.expiresAt) {
-          verificationCodes.delete(`reset_email_${email}`);
+        const isValid = await verifyCode(supabaseAdmin, 'reset_email', code, undefined, email);
+        if (!isValid) {
           return new Response(
             JSON.stringify({ error: '验证码不存在或已过期' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (stored.code !== code) {
-          return new Response(
-            JSON.stringify({ error: '验证码错误' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -372,8 +406,6 @@ serve(async (req) => {
         );
 
         if (updateError) throw updateError;
-
-        verificationCodes.delete(`reset_email_${email}`);
 
         return new Response(
           JSON.stringify({ success: true, message: '密码重置成功' }),
@@ -405,10 +437,7 @@ serve(async (req) => {
           );
         }
 
-        const code = generateCode();
-        const expiresAt = Date.now() + 10 * 60 * 1000;
-        verificationCodes.set(`register_phone_${phone}`, { code, expiresAt, type: 'phone' });
-
+        const code = await saveVerificationCode(supabaseAdmin, 'register_phone', phone);
         console.log(`Register phone verification code for ${phone}: ${code}`);
 
         return new Response(
@@ -438,25 +467,10 @@ serve(async (req) => {
         }
 
         // 验证验证码
-        const stored = verificationCodes.get(`register_phone_${phone}`);
-        if (!stored) {
+        const isValid = await verifyCode(supabaseAdmin, 'register_phone', code, phone);
+        if (!isValid) {
           return new Response(
             JSON.stringify({ error: '验证码不存在或已过期，请重新获取' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (Date.now() > stored.expiresAt) {
-          verificationCodes.delete(`register_phone_${phone}`);
-          return new Response(
-            JSON.stringify({ error: '验证码已过期，请重新获取' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (stored.code !== code) {
-          return new Response(
-            JSON.stringify({ error: '验证码错误' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -469,7 +483,6 @@ serve(async (req) => {
           .maybeSingle();
 
         if (existingProfile) {
-          verificationCodes.delete(`register_phone_${phone}`);
           return new Response(
             JSON.stringify({ error: '该手机号已被注册' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -489,12 +502,12 @@ serve(async (req) => {
         if (createError) {
           console.error('Create user error:', createError);
           return new Response(
-            JSON.stringify({ error: '注册失败，请稍后重试' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            JSON.stringify({ error: '注册失败：' + createError.message }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // 更新 profile 中的手机号
+        // 更新 profile 添加手机号
         const { error: profileError } = await supabaseAdmin
           .from('profiles')
           .update({ phone: phone })
@@ -504,17 +517,17 @@ serve(async (req) => {
           console.error('Update profile error:', profileError);
         }
 
-        // 分配供应商角色
+        // 添加供应商角色
         const { error: roleError } = await supabaseAdmin
           .from('user_roles')
-          .insert({ user_id: newUser.user.id, role: 'supplier' });
+          .insert({
+            user_id: newUser.user.id,
+            role: 'supplier'
+          });
 
         if (roleError) {
-          console.error('Assign role error:', roleError);
+          console.error('Add role error:', roleError);
         }
-
-        // 删除验证码
-        verificationCodes.delete(`register_phone_${phone}`);
 
         return new Response(
           JSON.stringify({ 
@@ -534,8 +547,8 @@ serve(async (req) => {
         );
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Auth API error:', errorMessage);
+    console.error('Auth API error:', error);
+    const errorMessage = error instanceof Error ? error.message : '服务器错误';
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,7 @@ interface PhoneRegisterFormProps {
   onSuccess: () => void;
 }
 
-export function PhoneRegisterForm({ onSuccess }: PhoneRegisterFormProps) {
+export const PhoneRegisterForm = forwardRef<HTMLDivElement, PhoneRegisterFormProps>(({ onSuccess }, ref) => {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -133,7 +133,7 @@ export function PhoneRegisterForm({ onSuccess }: PhoneRegisterFormProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={ref} className="space-y-4">
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -291,4 +291,6 @@ export function PhoneRegisterForm({ onSuccess }: PhoneRegisterFormProps) {
       )}
     </div>
   );
-}
+});
+
+PhoneRegisterForm.displayName = 'PhoneRegisterForm';

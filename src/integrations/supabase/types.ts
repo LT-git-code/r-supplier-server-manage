@@ -1185,11 +1185,45 @@ export type Database = {
         }
         Relationships: []
       }
+      verification_codes: {
+        Row: {
+          code: string
+          created_at: string
+          email: string | null
+          expires_at: string
+          id: string
+          phone: string | null
+          type: string
+          used: boolean | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          email?: string | null
+          expires_at: string
+          id?: string
+          phone?: string | null
+          type: string
+          used?: boolean | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          phone?: string | null
+          type?: string
+          used?: boolean | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_verification_codes: { Args: never; Returns: undefined }
       get_user_department_ids: { Args: { _user_id: string }; Returns: string[] }
       get_user_menus: {
         Args: { _terminal: string; _user_id: string }
