@@ -720,28 +720,28 @@ export default function AdminReports() {
           <div className="flex flex-col sm:flex-row gap-4 justify-between">
             <div className="flex gap-2">
               <Select
-                value={submissionFilter.templateId}
-                onValueChange={(v) => setSubmissionFilter(prev => ({ ...prev, templateId: v }))}
+                value={submissionFilter.templateId || "all"}
+                onValueChange={(v) => setSubmissionFilter(prev => ({ ...prev, templateId: v === "all" ? "" : v }))}
               >
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="选择报表模板" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">全部模板</SelectItem>
+                  <SelectItem value="all">全部模板</SelectItem>
                   {templates.map(t => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <Select
-                value={submissionFilter.status}
-                onValueChange={(v) => setSubmissionFilter(prev => ({ ...prev, status: v }))}
+                value={submissionFilter.status || "all"}
+                onValueChange={(v) => setSubmissionFilter(prev => ({ ...prev, status: v === "all" ? "" : v }))}
               >
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="选择状态" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">全部状态</SelectItem>
+                  <SelectItem value="all">全部状态</SelectItem>
                   <SelectItem value="pending">待审核</SelectItem>
                   <SelectItem value="approved">已通过</SelectItem>
                   <SelectItem value="rejected">已驳回</SelectItem>
