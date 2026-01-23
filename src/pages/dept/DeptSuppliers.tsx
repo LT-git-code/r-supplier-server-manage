@@ -21,9 +21,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Search, Power, PowerOff } from 'lucide-react';
+import { Search, Power, PowerOff, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import SupplierImportDialog from '@/components/dept/SupplierImportDialog';
 
 interface Supplier {
   id: string;
@@ -47,6 +48,7 @@ export default function DeptSuppliers() {
     type: 'enable' | 'disable';
     supplier?: Supplier;
   }>({ open: false, type: 'enable' });
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const fetchSuppliers = async () => {
     setLoading(true);
@@ -112,13 +114,19 @@ export default function DeptSuppliers() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">供应商管理</h1>
-        <div className="flex gap-4 text-sm">
-          <span className="text-muted-foreground">
-            已启用: <span className="font-medium text-green-600">{enabledCount}</span>
-          </span>
-          <span className="text-muted-foreground">
-            已停用: <span className="font-medium text-gray-500">{disabledCount}</span>
-          </span>
+        <div className="flex items-center gap-4">
+          <div className="flex gap-4 text-sm">
+            <span className="text-muted-foreground">
+              已启用: <span className="font-medium text-green-600">{enabledCount}</span>
+            </span>
+            <span className="text-muted-foreground">
+              已停用: <span className="font-medium text-gray-500">{disabledCount}</span>
+            </span>
+          </div>
+          <Button onClick={() => setImportDialogOpen(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            批量导入
+          </Button>
         </div>
       </div>
 
@@ -256,6 +264,13 @@ export default function DeptSuppliers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 供应商导入弹窗 */}
+      <SupplierImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImportComplete={fetchSuppliers}
+      />
     </div>
   );
 }

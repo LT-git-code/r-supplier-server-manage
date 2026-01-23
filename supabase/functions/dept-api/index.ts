@@ -464,6 +464,203 @@ serve(async (req) => {
         );
       }
 
+      case 'import_suppliers': {
+        const { suppliers } = params;
+        
+        if (!suppliers || !Array.isArray(suppliers) || suppliers.length === 0) {
+          return new Response(
+            JSON.stringify({ error: '无效的供应商数据' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (!primaryDeptId) {
+          return new Response(
+            JSON.stringify({ error: '系统中无可用部门' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const successList: Array<{
+          company_name: string;
+          supplier_type: string;
+          contact_name: string;
+          contact_phone: string;
+          buyer_name: string;
+          cooperation_tag: string;
+        }> = [];
+        const failedList: Array<{
+          row: number;
+          company_name: string;
+          reason: string;
+          data: Record<string, string>;
+        }> = [];
+
+        // 供应商类型映射
+        const typeMapping: Record<string, string> = {
+          '国内公司': 'enterprise',
+          '海外公司': 'overseas',
+          '个人': 'individual',
+        };
+
+        // 合作标签映射到数据库字段
+        const tagMapping: Record<string, { is_recommended: boolean; is_blacklisted: boolean }> = {
+          '推荐供应商': { is_recommended: true, is_blacklisted: false },
+          '良好供应商': { is_recommended: false, is_blacklisted: false },
+          '异议供应商': { is_recommended: false, is_blacklisted: false },
+          '拉黑供应商': { is_recommended: false, is_blacklisted: true },
+        };
+
+        for (let i = 0; i < suppliers.length; i++) {
+          const row = i + 2; // 行号从2开始（跳过表头）
+          const s = suppliers[i];
+          
+          try {
+            // 验证必填字段
+            if (!s.company_name || !s.company_name.trim()) {
+              failedList.push({
+                row,
+                company_name: s.company_name || '',
+                reason: '供应商名称不能为空',
+                data: s,
+              });
+              continue;
+            }
+
+            // 验证供应商类型
+            const supplierType = typeMapping[s.supplier_type];
+            if (!supplierType) {
+              failedList.push({
+                row,
+                company_name: s.company_name,
+                reason: `无效的供应商类别: ${s.supplier_type}，应为 国内公司/海外公司/个人`,
+                data: s,
+              });
+              continue;
+            }
+
+            // 验证合作标签（可选）
+            let tagData = { is_recommended: false, is_blacklisted: false };
+            if (s.cooperation_tag && s.cooperation_tag.trim()) {
+              const mappedTag = tagMapping[s.cooperation_tag];
+              if (!mappedTag) {
+                failedList.push({
+                  row,
+                  company_name: s.company_name,
+                  reason: `无效的合作标签: ${s.cooperation_tag}，应为 推荐供应商/良好供应商/异议供应商/拉黑供应商`,
+                  data: s,
+                });
+                continue;
+              }
+              tagData = mappedTag;
+            }
+
+            // 检查是否已存在同名供应商
+            const { data: existingSupplier } = await supabaseAdmin
+              .from('suppliers')
+              .select('id')
+              .eq('company_name', s.company_name.trim())
+              .maybeSingle();
+
+            if (existingSupplier) {
+              failedList.push({
+                row,
+                company_name: s.company_name,
+                reason: '供应商名称已存在',
+                data: s,
+              });
+              continue;
+            }
+
+            // ============================================
+            // 预留第三方接口校验位置
+            // TODO: 调用企查查或天眼查API验证公司真实性
+            // const verificationResult = await verifyCompany(s.company_name, s.supplier_type);
+            // if (!verificationResult.valid) {
+            //   failedList.push({
+            //     row,
+            //     company_name: s.company_name,
+            //     reason: `第三方验证失败: ${verificationResult.message}`,
+            //     data: s,
+            //   });
+            //   continue;
+            // }
+            // ============================================
+
+            // 创建供应商记录（状态直接设为已批准，因为是部门导入）
+            const { data: newSupplier, error: insertError } = await supabaseAdmin
+              .from('suppliers')
+              .insert({
+                company_name: s.company_name.trim(),
+                supplier_type: supplierType,
+                contact_name: s.contact_name?.trim() || null,
+                contact_phone: s.contact_phone?.trim() || null,
+                user_id: user.id, // 关联到当前用户
+                status: 'approved',
+                is_recommended: tagData.is_recommended,
+                is_blacklisted: tagData.is_blacklisted,
+                recommended_by: tagData.is_recommended ? user.id : null,
+                recommended_at: tagData.is_recommended ? new Date().toISOString() : null,
+                blacklisted_by: tagData.is_blacklisted ? user.id : null,
+                blacklisted_at: tagData.is_blacklisted ? new Date().toISOString() : null,
+                blacklist_reason: tagData.is_blacklisted ? '批量导入标记' : null,
+              })
+              .select('id')
+              .single();
+
+            if (insertError) {
+              console.error('Insert supplier error:', insertError);
+              failedList.push({
+                row,
+                company_name: s.company_name,
+                reason: `数据库错误: ${insertError.message}`,
+                data: s,
+              });
+              continue;
+            }
+
+            // 创建部门-供应商关联（默认启用）
+            const libraryType = tagData.is_blacklisted ? 'disabled' : 'current';
+            await supabaseAdmin
+              .from('department_suppliers')
+              .insert({
+                department_id: primaryDeptId,
+                supplier_id: newSupplier.id,
+                added_by: user.id,
+                library_type: libraryType,
+                reason: `批量导入 - 采购员: ${s.buyer_name || '未指定'}`,
+              });
+
+            successList.push({
+              company_name: s.company_name,
+              supplier_type: supplierType,
+              contact_name: s.contact_name || '',
+              contact_phone: s.contact_phone || '',
+              buyer_name: s.buyer_name || '',
+              cooperation_tag: s.cooperation_tag || '',
+            });
+
+          } catch (err) {
+            console.error('Process supplier error:', err);
+            failedList.push({
+              row,
+              company_name: s.company_name || '',
+              reason: '处理异常',
+              data: s,
+            });
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: successList,
+            failed: failedList,
+            total: suppliers.length,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: '未知操作' }),
