@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -39,7 +39,13 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { 
   Loader2, 
   Search,
@@ -51,13 +57,10 @@ import {
   Mail,
   MapPin,
   CreditCard,
-  FileText,
   Package,
   RefreshCw,
   AlertCircle,
   Ban,
-  RotateCcw,
-  Trash2,
   ChevronLeft,
   ChevronRight,
   Users,
@@ -68,6 +71,10 @@ import {
   ShieldOff,
   Star,
   StarOff,
+  MoreHorizontal,
+  AlertTriangle,
+  Library,
+  Crown,
 } from 'lucide-react';
 
 interface SupplierProfile {
@@ -114,6 +121,7 @@ interface Supplier {
   is_recommended: boolean;
   blacklisted_at: string | null;
   blacklist_reason: string | null;
+  has_objection?: boolean;
 }
 
 interface Statistics {
@@ -131,6 +139,8 @@ interface Statistics {
   };
 }
 
+type LibraryTab = 'all' | 'premium' | 'blacklist';
+
 const statusLabels: Record<string, string> = {
   pending: '待审核',
   approved: '已通过',
@@ -145,13 +155,6 @@ const statusColors: Record<string, string> = {
   suspended: 'bg-muted text-muted-foreground border-muted',
 };
 
-const statusIcons: Record<string, any> = {
-  pending: Clock,
-  approved: CheckCircle,
-  rejected: XCircle,
-  suspended: Ban,
-};
-
 const typeLabels: Record<string, string> = {
   enterprise: '企业',
   overseas: '海外企业',
@@ -164,6 +167,24 @@ const typeIcons: Record<string, any> = {
   individual: User,
 };
 
+const TAB_CONFIG: Record<LibraryTab, { label: string; icon: React.ReactNode; description: string }> = {
+  all: { 
+    label: '总库', 
+    icon: <Library className="h-4 w-4" />,
+    description: '展示所有供应商'
+  },
+  premium: { 
+    label: '优质库', 
+    icon: <Crown className="h-4 w-4" />,
+    description: '展示所有标签为优质供应商的供应商'
+  },
+  blacklist: { 
+    label: '拉黑异议库', 
+    icon: <ShieldOff className="h-4 w-4" />,
+    description: '展示所有被拉黑和有异议标签的供应商'
+  },
+};
+
 export default function AdminSuppliers() {
   const { toast } = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -171,9 +192,7 @@ export default function AdminSuppliers() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [blacklistFilter, setBlacklistFilter] = useState('all');
-  const [recommendedFilter, setRecommendedFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState<LibraryTab>('all');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 15;
@@ -201,6 +220,10 @@ export default function AdminSuppliers() {
   const [blacklistDialogOpen, setBlacklistDialogOpen] = useState(false);
   const [blacklistReason, setBlacklistReason] = useState('');
 
+  // 异议对话框
+  const [objectionDialogOpen, setObjectionDialogOpen] = useState(false);
+  const [objectionReason, setObjectionReason] = useState('');
+
   const fetchStatistics = async () => {
     try {
       const { data, error } = await supabase.functions.invoke('admin-suppliers', {
@@ -216,12 +239,23 @@ export default function AdminSuppliers() {
   const fetchSuppliers = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // 根据tab设置筛选条件
+      let blacklistFilter = 'all';
+      let recommendedFilter = 'all';
+      
+      if (activeTab === 'premium') {
+        recommendedFilter = 'recommended';
+      } else if (activeTab === 'blacklist') {
+        blacklistFilter = 'blacklisted';
+      }
+      
       const { data, error } = await supabase.functions.invoke('admin-suppliers', {
         body: { 
           action: 'list', 
           search,
           status: statusFilter,
-          type: typeFilter,
+          type: 'all',
           blacklistFilter,
           recommendedFilter,
           page,
@@ -243,7 +277,7 @@ export default function AdminSuppliers() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, typeFilter, blacklistFilter, recommendedFilter, page, pageSize, toast]);
+  }, [search, statusFilter, activeTab, page, pageSize, toast]);
 
   useEffect(() => {
     fetchSuppliers();
@@ -258,6 +292,11 @@ export default function AdminSuppliers() {
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value as LibraryTab);
+    setPage(1);
+  };
 
   const fetchSupplierDetail = async (supplier: Supplier) => {
     setSelectedSupplier(supplier);
@@ -410,7 +449,6 @@ export default function AdminSuppliers() {
       toast({ title: '已拉黑供应商' });
       setBlacklistDialogOpen(false);
       setBlacklistReason('');
-      setDetailOpen(false);
       fetchSuppliers();
       fetchStatistics();
     } catch (error: any) {
@@ -425,19 +463,16 @@ export default function AdminSuppliers() {
   };
 
   // 解除拉黑
-  const handleUnblacklist = async () => {
-    if (!selectedSupplier) return;
-
+  const handleUnblacklist = async (supplier: Supplier) => {
     try {
       setProcessing(true);
       const { error } = await supabase.functions.invoke('admin-suppliers', {
-        body: { action: 'unblacklist', supplierId: selectedSupplier.id },
+        body: { action: 'unblacklist', supplierId: supplier.id },
       });
 
       if (error) throw error;
 
       toast({ title: '已解除拉黑' });
-      setDetailOpen(false);
       fetchSuppliers();
       fetchStatistics();
     } catch (error: any) {
@@ -452,19 +487,16 @@ export default function AdminSuppliers() {
   };
 
   // 推荐供应商
-  const handleRecommend = async () => {
-    if (!selectedSupplier) return;
-
+  const handleRecommend = async (supplier: Supplier) => {
     try {
       setProcessing(true);
       const { error } = await supabase.functions.invoke('admin-suppliers', {
-        body: { action: 'recommend', supplierId: selectedSupplier.id },
+        body: { action: 'recommend', supplierId: supplier.id },
       });
 
       if (error) throw error;
 
       toast({ title: '已推荐供应商' });
-      setDetailOpen(false);
       fetchSuppliers();
       fetchStatistics();
     } catch (error: any) {
@@ -479,21 +511,49 @@ export default function AdminSuppliers() {
   };
 
   // 取消推荐
-  const handleUnrecommend = async () => {
-    if (!selectedSupplier) return;
-
+  const handleUnrecommend = async (supplier: Supplier) => {
     try {
       setProcessing(true);
       const { error } = await supabase.functions.invoke('admin-suppliers', {
-        body: { action: 'unrecommend', supplierId: selectedSupplier.id },
+        body: { action: 'unrecommend', supplierId: supplier.id },
       });
 
       if (error) throw error;
 
       toast({ title: '已取消推荐' });
-      setDetailOpen(false);
       fetchSuppliers();
       fetchStatistics();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '操作失败',
+        description: error.message,
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // 标记异议
+  const handleObjection = async () => {
+    if (!selectedSupplier) return;
+
+    try {
+      setProcessing(true);
+      const { error } = await supabase.functions.invoke('admin-suppliers', {
+        body: { 
+          action: 'add_objection', 
+          supplierId: selectedSupplier.id,
+          reason: objectionReason,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({ title: '已标记异议' });
+      setObjectionDialogOpen(false);
+      setObjectionReason('');
+      fetchSuppliers();
     } catch (error: any) {
       toast({
         variant: 'destructive',
@@ -521,96 +581,18 @@ export default function AdminSuppliers() {
         </Button>
       </div>
 
-      {/* 统计卡片 */}
+      {/* 统计卡片 - 只显示4个：总供应商数、海外供应商数、国内供应商数、个人供应商数 */}
       {statistics && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary/10 rounded-lg">
-                  <Building2 className="h-5 w-5 text-primary" />
+                  <Users className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">总数</p>
+                  <p className="text-sm text-muted-foreground">总供应商数</p>
                   <p className="text-2xl font-bold">{statistics.total}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-success/10 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-success" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">已通过</p>
-                  <p className="text-2xl font-bold">{statistics.approved}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-warning/10 rounded-lg">
-                  <Clock className="h-5 w-5 text-warning" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">待审核</p>
-                  <p className="text-2xl font-bold">{statistics.pending}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-muted rounded-lg">
-                  <Ban className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">已暂停</p>
-                  <p className="text-2xl font-bold">{statistics.suspended}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:border-destructive/50 transition-colors" onClick={() => { setBlacklistFilter('blacklisted'); setPage(1); }}>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-destructive/10 rounded-lg">
-                  <ShieldOff className="h-5 w-5 text-destructive" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">已拉黑</p>
-                  <p className="text-2xl font-bold">{statistics.blacklisted}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:border-amber-500/50 transition-colors" onClick={() => { setRecommendedFilter('recommended'); setPage(1); }}>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-500/10 rounded-lg">
-                  <Star className="h-5 w-5 text-amber-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">推荐</p>
-                  <p className="text-2xl font-bold">{statistics.recommended}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Building2 className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">企业</p>
-                  <p className="text-2xl font-bold">{statistics.byType.enterprise}</p>
                 </div>
               </div>
             </CardContent>
@@ -622,8 +604,34 @@ export default function AdminSuppliers() {
                   <Globe className="h-5 w-5 text-purple-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">海外</p>
+                  <p className="text-sm text-muted-foreground">海外供应商数</p>
                   <p className="text-2xl font-bold">{statistics.byType.overseas}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <Building2 className="h-5 w-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">国内供应商数</p>
+                  <p className="text-2xl font-bold">{statistics.byType.enterprise}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-500/10 rounded-lg">
+                  <User className="h-5 w-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">个人供应商数</p>
+                  <p className="text-2xl font-bold">{statistics.byType.individual}</p>
                 </div>
               </div>
             </CardContent>
@@ -631,9 +639,29 @@ export default function AdminSuppliers() {
         </div>
       )}
 
+      {/* Tab切换 */}
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="grid w-full grid-cols-3">
+          {(Object.keys(TAB_CONFIG) as LibraryTab[]).map((tab) => (
+            <TabsTrigger key={tab} value={tab} className="flex items-center gap-2">
+              {TAB_CONFIG[tab].icon}
+              <span>{TAB_CONFIG[tab].label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
       {/* 筛选和搜索 */}
       <Card>
         <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm text-muted-foreground">
+              {TAB_CONFIG[activeTab].description}
+              <span className="ml-2 font-medium text-foreground">
+                共 {total} 个供应商
+              </span>
+            </div>
+          </div>
           <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -654,37 +682,6 @@ export default function AdminSuppliers() {
                 <SelectItem value="pending">待审核</SelectItem>
                 <SelectItem value="suspended">已暂停</SelectItem>
                 <SelectItem value="rejected">已驳回</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="类型" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部类型</SelectItem>
-                <SelectItem value="enterprise">企业</SelectItem>
-                <SelectItem value="overseas">海外企业</SelectItem>
-                <SelectItem value="individual">个人</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={blacklistFilter} onValueChange={(v) => { setBlacklistFilter(v); setPage(1); }}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="拉黑状态" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                <SelectItem value="blacklisted">已拉黑</SelectItem>
-                <SelectItem value="normal">正常</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={recommendedFilter} onValueChange={(v) => { setRecommendedFilter(v); setPage(1); }}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="推荐状态" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                <SelectItem value="recommended">推荐</SelectItem>
-                <SelectItem value="normal">普通</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -711,13 +708,12 @@ export default function AdminSuppliers() {
                     <TableRow>
                       <TableHead>供应商名称</TableHead>
                       <TableHead>类型</TableHead>
-                      <TableHead>标签</TableHead>
                       <TableHead>联系人</TableHead>
                       <TableHead>联系方式</TableHead>
                       <TableHead>地区</TableHead>
                       <TableHead>状态</TableHead>
                       <TableHead>注册时间</TableHead>
-                      <TableHead className="w-28">操作</TableHead>
+                      <TableHead className="w-32 text-right">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -727,12 +723,18 @@ export default function AdminSuppliers() {
                         <TableRow key={supplier.id} className={supplier.is_blacklisted ? 'bg-destructive/5' : ''}>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <TypeIcon className="h-4 w-4 text-muted-foreground" />
+                              <TypeIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                               <div>
-                                <div className="font-medium flex items-center gap-1">
-                                  {supplier.company_name || supplier.contact_name || '未填写'}
+                                <div className="font-medium flex items-center gap-1.5 flex-wrap">
+                                  <span>{supplier.company_name || supplier.contact_name || '未填写'}</span>
                                   {supplier.is_recommended && (
-                                    <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                                    <span className="text-xs text-amber-600 font-normal">优质</span>
+                                  )}
+                                  {supplier.is_blacklisted && (
+                                    <span className="text-xs text-destructive font-normal">拉黑</span>
+                                  )}
+                                  {supplier.has_objection && (
+                                    <span className="text-xs text-orange-500 font-normal">异议</span>
                                   )}
                                 </div>
                                 {supplier.unified_social_credit_code && (
@@ -745,25 +747,6 @@ export default function AdminSuppliers() {
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{typeLabels[supplier.supplier_type]}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1 flex-wrap">
-                              {supplier.is_blacklisted && (
-                                <Badge variant="destructive" className="gap-1">
-                                  <ShieldOff className="h-3 w-3" />
-                                  拉黑
-                                </Badge>
-                              )}
-                              {supplier.is_recommended && (
-                                <Badge className="gap-1 bg-amber-500 hover:bg-amber-600">
-                                  <Star className="h-3 w-3" />
-                                  推荐
-                                </Badge>
-                              )}
-                              {!supplier.is_blacklisted && !supplier.is_recommended && (
-                                <span className="text-muted-foreground text-sm">-</span>
-                              )}
-                            </div>
                           </TableCell>
                           <TableCell>{supplier.contact_name || '-'}</TableCell>
                           <TableCell>
@@ -785,25 +768,62 @@ export default function AdminSuppliers() {
                           <TableCell className="text-sm">
                             {new Date(supplier.created_at).toLocaleDateString('zh-CN')}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => fetchSupplierDetail(supplier)}
-                                title="查看详情"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(supplier)}
-                                title="编辑"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </div>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" disabled={processing}>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => fetchSupplierDetail(supplier)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  查看详情
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEdit(supplier)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  编辑
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {supplier.is_recommended ? (
+                                  <DropdownMenuItem onClick={() => handleUnrecommend(supplier)}>
+                                    <StarOff className="h-4 w-4 mr-2" />
+                                    取消推荐
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={() => handleRecommend(supplier)}>
+                                    <Star className="h-4 w-4 mr-2" />
+                                    推荐
+                                  </DropdownMenuItem>
+                                )}
+                                {supplier.is_blacklisted ? (
+                                  <DropdownMenuItem onClick={() => handleUnblacklist(supplier)}>
+                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                    解除拉黑
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem 
+                                    onClick={() => {
+                                      setSelectedSupplier(supplier);
+                                      setBlacklistDialogOpen(true);
+                                    }}
+                                    className="text-destructive"
+                                  >
+                                    <ShieldOff className="h-4 w-4 mr-2" />
+                                    拉黑
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    setSelectedSupplier(supplier);
+                                    setObjectionDialogOpen(true);
+                                  }}
+                                >
+                                  <AlertTriangle className="h-4 w-4 mr-2" />
+                                  异议
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       );
@@ -862,31 +882,44 @@ export default function AdminSuppliers() {
           ) : selectedSupplier && (
             <div className="mt-6 space-y-6">
               {/* 状态和标签 */}
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className={statusColors[selectedSupplier.status]}>
-                    {statusLabels[selectedSupplier.status]}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="outline" className={statusColors[selectedSupplier.status]}>
+                  {statusLabels[selectedSupplier.status]}
+                </Badge>
+                <Badge variant="outline">{typeLabels[selectedSupplier.supplier_type]}</Badge>
+                {selectedSupplier.is_recommended && (
+                  <Badge className="gap-1 bg-amber-500 hover:bg-amber-600">
+                    <Star className="h-3 w-3" />
+                    优质
                   </Badge>
-                  <Badge variant="outline">{typeLabels[selectedSupplier.supplier_type]}</Badge>
-                  {selectedSupplier.is_blacklisted && (
-                    <Badge variant="destructive" className="gap-1">
-                      <ShieldOff className="h-3 w-3" />
-                      已拉黑
-                    </Badge>
-                  )}
-                  {selectedSupplier.is_recommended && (
-                    <Badge className="gap-1 bg-amber-500 hover:bg-amber-600">
-                      <Star className="h-3 w-3" />
-                      推荐
-                    </Badge>
-                  )}
-                </div>
+                )}
+                {selectedSupplier.is_blacklisted && (
+                  <Badge variant="destructive" className="gap-1">
+                    <ShieldOff className="h-3 w-3" />
+                    拉黑
+                  </Badge>
+                )}
               </div>
 
               {/* 操作按钮 */}
               <div className="flex flex-wrap gap-2">
-                {/* 拉黑/解除拉黑 */}
-                {!selectedSupplier.is_blacklisted ? (
+                {selectedSupplier.is_recommended ? (
+                  <Button variant="outline" size="sm" onClick={() => handleUnrecommend(selectedSupplier)}>
+                    <StarOff className="h-4 w-4 mr-1" />
+                    取消推荐
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => handleRecommend(selectedSupplier)}>
+                    <Star className="h-4 w-4 mr-1" />
+                    推荐
+                  </Button>
+                )}
+                {selectedSupplier.is_blacklisted ? (
+                  <Button variant="outline" size="sm" onClick={() => handleUnblacklist(selectedSupplier)}>
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    解除拉黑
+                  </Button>
+                ) : (
                   <Button
                     variant="outline"
                     size="sm"
@@ -896,43 +929,7 @@ export default function AdminSuppliers() {
                     <ShieldOff className="h-4 w-4 mr-1" />
                     拉黑
                   </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleUnblacklist}
-                    disabled={processing}
-                  >
-                    <RotateCcw className="h-4 w-4 mr-1" />
-                    解除拉黑
-                  </Button>
                 )}
-                
-                {/* 推荐/取消推荐 */}
-                {!selectedSupplier.is_recommended ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-amber-600 hover:text-amber-700"
-                    onClick={handleRecommend}
-                    disabled={processing || selectedSupplier.is_blacklisted}
-                  >
-                    <Star className="h-4 w-4 mr-1" />
-                    推荐
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleUnrecommend}
-                    disabled={processing}
-                  >
-                    <StarOff className="h-4 w-4 mr-1" />
-                    取消推荐
-                  </Button>
-                )}
-
-                {/* 暂停/恢复 */}
                 {selectedSupplier.status === 'approved' && (
                   <Button
                     variant="outline"
@@ -955,46 +952,15 @@ export default function AdminSuppliers() {
                       setStatusDialogOpen(true);
                     }}
                   >
-                    <RotateCcw className="h-4 w-4 mr-1" />
+                    <CheckCircle className="h-4 w-4 mr-1" />
                     恢复
                   </Button>
                 )}
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEdit(selectedSupplier)}
-                >
-                  <Edit className="h-4 w-4 mr-1" />
-                  编辑
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setDeleteDialogOpen(true)}
-                >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  删除
-                </Button>
               </div>
 
-              {/* 拉黑原因 */}
-              {selectedSupplier.is_blacklisted && selectedSupplier.blacklist_reason && (
-                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-                  <p className="text-sm font-medium text-destructive">拉黑原因：</p>
-                  <p className="text-sm text-muted-foreground mt-1">{selectedSupplier.blacklist_reason}</p>
-                </div>
-              )}
+              <Separator />
 
-              {/* 暂停原因 */}
-              {selectedSupplier.rejection_reason && selectedSupplier.status === 'suspended' && (
-                <div className="p-3 bg-muted/50 border rounded-lg">
-                  <p className="text-sm font-medium">暂停原因：</p>
-                  <p className="text-sm text-muted-foreground mt-1">{selectedSupplier.rejection_reason}</p>
-                </div>
-              )}
-
-              <Tabs defaultValue="basic">
+              <Tabs defaultValue="basic" className="w-full">
                 <TabsList className="w-full">
                   <TabsTrigger value="basic" className="flex-1">基本信息</TabsTrigger>
                   <TabsTrigger value="qualifications" className="flex-1">资质证书</TabsTrigger>
@@ -1477,6 +1443,41 @@ export default function AdminSuppliers() {
             >
               {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               确认拉黑
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 异议对话框 */}
+      <Dialog open={objectionDialogOpen} onOpenChange={setObjectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>标记异议</DialogTitle>
+            <DialogDescription>
+              标记该供应商存在异议，将在列表中显示异议标签。
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-2">
+            <Label>异议原因 *</Label>
+            <Textarea
+              value={objectionReason}
+              onChange={(e) => setObjectionReason(e.target.value)}
+              placeholder="请输入异议原因..."
+              rows={3}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setObjectionDialogOpen(false)}>
+              取消
+            </Button>
+            <Button 
+              onClick={handleObjection} 
+              disabled={processing || !objectionReason.trim()}
+            >
+              {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              确认标记
             </Button>
           </DialogFooter>
         </DialogContent>
