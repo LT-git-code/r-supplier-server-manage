@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -21,10 +22,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Search, Power, PowerOff, Upload } from 'lucide-react';
+import { Search, Power, PowerOff, Upload, Building2, Star, FolderOpen, ShieldX } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import SupplierImportDialog from '@/components/dept/SupplierImportDialog';
+
+type LibraryTab = 'organization' | 'premium' | 'backup' | 'blacklist';
 
 interface Supplier {
   id: string;
@@ -36,12 +39,38 @@ interface Supplier {
   main_products: string;
   dept_supplier_id: string | null;
   library_type: string;
+  is_recommended?: boolean;
+  is_blacklisted?: boolean;
 }
+
+const TAB_CONFIG: Record<LibraryTab, { label: string; icon: React.ReactNode; description: string }> = {
+  organization: { 
+    label: '组织库', 
+    icon: <Building2 className="h-4 w-4" />,
+    description: '当前部门启用的供应商'
+  },
+  premium: { 
+    label: '优质库', 
+    icon: <Star className="h-4 w-4" />,
+    description: '标签为推荐的优质供应商'
+  },
+  backup: { 
+    label: '备选库', 
+    icon: <FolderOpen className="h-4 w-4" />,
+    description: '本部门未启用的非拉黑供应商'
+  },
+  blacklist: { 
+    label: '拉黑异议库', 
+    icon: <ShieldX className="h-4 w-4" />,
+    description: '被拉黑或有异议标签的供应商'
+  },
+};
 
 export default function DeptSuppliers() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<LibraryTab>('organization');
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -50,11 +79,11 @@ export default function DeptSuppliers() {
   }>({ open: false, type: 'enable' });
   const [importDialogOpen, setImportDialogOpen] = useState(false);
 
-  const fetchSuppliers = async () => {
+  const fetchSuppliers = async (tab: LibraryTab = activeTab) => {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('dept-api', {
-        body: { action: 'get_dept_suppliers' },
+        body: { action: 'get_dept_suppliers', libraryTab: tab },
       });
       if (error) throw error;
       setSuppliers(data.suppliers || []);
@@ -67,8 +96,8 @@ export default function DeptSuppliers() {
   };
 
   useEffect(() => {
-    fetchSuppliers();
-  }, []);
+    fetchSuppliers(activeTab);
+  }, [activeTab]);
 
   const handleToggleSupplier = async (supplierId: string, enable: boolean) => {
     setActionLoading(true);
@@ -81,7 +110,7 @@ export default function DeptSuppliers() {
       });
       if (error) throw error;
       toast.success(enable ? '供应商已启用' : '供应商已停用');
-      fetchSuppliers();
+      fetchSuppliers(activeTab);
       setConfirmDialog({ open: false, type: enable ? 'enable' : 'disable' });
     } catch (error) {
       console.error('Error toggling supplier:', error);
@@ -89,6 +118,11 @@ export default function DeptSuppliers() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value as LibraryTab);
+    setSearch('');
   };
 
   const getSupplierTypeBadge = (type: string) => {
@@ -107,42 +141,50 @@ export default function DeptSuppliers() {
     s.main_products?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const enabledCount = suppliers.filter(s => s.library_type === 'current').length;
-  const disabledCount = suppliers.length - enabledCount;
+  // 根据不同Tab决定是否显示启用/停用操作
+  const showEnableAction = activeTab === 'backup' || activeTab === 'premium';
+  const showDisableAction = activeTab === 'organization';
+  const showBlacklistInfo = activeTab === 'blacklist';
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">供应商管理</h1>
-        <div className="flex items-center gap-4">
-          <div className="flex gap-4 text-sm">
-            <span className="text-muted-foreground">
-              已启用: <span className="font-medium text-green-600">{enabledCount}</span>
-            </span>
-            <span className="text-muted-foreground">
-              已停用: <span className="font-medium text-gray-500">{disabledCount}</span>
-            </span>
-          </div>
-          <Button onClick={() => setImportDialogOpen(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            批量导入
-          </Button>
-        </div>
+        <Button onClick={() => setImportDialogOpen(true)}>
+          <Upload className="h-4 w-4 mr-2" />
+          批量导入
+        </Button>
       </div>
 
+      {/* Tab切换 */}
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="grid w-full grid-cols-4">
+          {(Object.keys(TAB_CONFIG) as LibraryTab[]).map((tab) => (
+            <TabsTrigger key={tab} value={tab} className="flex items-center gap-2">
+              {TAB_CONFIG[tab].icon}
+              <span>{TAB_CONFIG[tab].label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">已批准供应商</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4 mb-4">
-            <div className="relative flex-1 max-w-sm">
+        <CardContent className="pt-6">
+          {/* Tab描述和统计 */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm text-muted-foreground">
+              {TAB_CONFIG[activeTab].description}
+              <span className="ml-2 font-medium text-foreground">
+                共 {suppliers.length} 个供应商
+              </span>
+            </div>
+            <div className="relative max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="搜索供应商名称、联系人或主营产品..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                className="pl-9 w-64"
               />
             </div>
           </div>
@@ -156,21 +198,23 @@ export default function DeptSuppliers() {
                   <TableHead>联系人</TableHead>
                   <TableHead>联系电话</TableHead>
                   <TableHead>主营产品</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead>标签</TableHead>
+                  {(showEnableAction || showDisableAction) && (
+                    <TableHead className="text-right">操作</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={showEnableAction || showDisableAction ? 7 : 6} className="text-center py-8">
                       加载中...
                     </TableCell>
                   </TableRow>
                 ) : filteredSuppliers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      暂无已批准的供应商
+                    <TableCell colSpan={showEnableAction || showDisableAction ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                      暂无供应商
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -188,41 +232,55 @@ export default function DeptSuppliers() {
                         {supplier.main_products || '-'}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={supplier.library_type === 'current' ? 'default' : 'secondary'}>
-                          {supplier.library_type === 'current' ? '已启用' : '已停用'}
-                        </Badge>
+                        <div className="flex gap-1">
+                          {supplier.is_recommended && (
+                            <Badge variant="default" className="bg-amber-500">推荐</Badge>
+                          )}
+                          {supplier.is_blacklisted && (
+                            <Badge variant="destructive">拉黑</Badge>
+                          )}
+                          {!supplier.is_recommended && !supplier.is_blacklisted && (
+                            <Badge variant="secondary">普通</Badge>
+                          )}
+                          {supplier.library_type === 'current' && (
+                            <Badge variant="outline" className="text-green-600 border-green-600">已启用</Badge>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right">
-                        {supplier.library_type === 'current' ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setConfirmDialog({ 
-                              open: true, 
-                              type: 'disable', 
-                              supplier 
-                            })}
-                            disabled={actionLoading}
-                          >
-                            <PowerOff className="h-4 w-4 mr-1" />
-                            停用
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setConfirmDialog({ 
-                              open: true, 
-                              type: 'enable', 
-                              supplier 
-                            })}
-                            disabled={actionLoading}
-                          >
-                            <Power className="h-4 w-4 mr-1" />
-                            启用
-                          </Button>
-                        )}
-                      </TableCell>
+                      {(showEnableAction || showDisableAction) && (
+                        <TableCell className="text-right">
+                          {showDisableAction && supplier.library_type === 'current' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setConfirmDialog({ 
+                                open: true, 
+                                type: 'disable', 
+                                supplier 
+                              })}
+                              disabled={actionLoading}
+                            >
+                              <PowerOff className="h-4 w-4 mr-1" />
+                              停用
+                            </Button>
+                          )}
+                          {showEnableAction && supplier.library_type !== 'current' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setConfirmDialog({ 
+                                open: true, 
+                                type: 'enable', 
+                                supplier 
+                              })}
+                              disabled={actionLoading}
+                            >
+                              <Power className="h-4 w-4 mr-1" />
+                              启用
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}

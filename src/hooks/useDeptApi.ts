@@ -21,7 +21,7 @@ export function useDeptApi() {
     getRecentEnabledSuppliers: (limit = 5) => callApi('get_recent_enabled_suppliers', { limit }),
 
     // Suppliers
-    getSuppliers: () => callApi('get_dept_suppliers'),
+    getSuppliers: (libraryTab?: string) => callApi('get_dept_suppliers', { libraryTab }),
     enableSupplier: (supplierId: string) => callApi('enable_supplier', { supplierId }),
     disableSupplier: (supplierId: string) => callApi('disable_supplier', { supplierId }),
     getSupplierDetail: (supplierId: string) => callApi('get_supplier_detail', { supplierId }),

@@ -148,28 +148,58 @@ serve(async (req) => {
       }
 
       case 'get_dept_suppliers': {
-        // 获取所有已批准的供应商
+        const { libraryTab = 'organization' } = params;
+        
+        // 获取所有已批准的供应商，包含推荐和拉黑状态
         const { data: allSuppliers, error: suppliersError } = await supabaseAdmin
           .from('suppliers')
-          .select('id, company_name, supplier_type, contact_name, contact_phone, status, main_products')
+          .select('id, company_name, supplier_type, contact_name, contact_phone, status, main_products, is_recommended, is_blacklisted')
           .eq('status', 'approved')
           .order('company_name');
 
         if (suppliersError) throw suppliersError;
 
-        // 获取全局启用状态（任意部门启用即视为启用）
-        const { data: allDeptSuppliers } = await supabaseAdmin
+        // 获取本部门的启用状态
+        const { data: deptSuppliers } = await supabaseAdmin
           .from('department_suppliers')
           .select('supplier_id, library_type')
-          .eq('library_type', 'current');
+          .eq('department_id', primaryDeptId);
 
-        const enabledSupplierIds = new Set(allDeptSuppliers?.map(ds => ds.supplier_id) || []);
+        const enabledSupplierIds = new Set(
+          deptSuppliers?.filter(ds => ds.library_type === 'current').map(ds => ds.supplier_id) || []
+        );
+
+        // 根据Tab筛选供应商
+        let filteredSuppliers = allSuppliers || [];
+        
+        switch (libraryTab) {
+          case 'organization':
+            // 组织库：当前部门启用的供应商
+            filteredSuppliers = filteredSuppliers.filter(s => enabledSupplierIds.has(s.id));
+            break;
+          case 'premium':
+            // 优质库：所有标签为推荐的供应商
+            filteredSuppliers = filteredSuppliers.filter(s => s.is_recommended === true);
+            break;
+          case 'backup':
+            // 备选库：本部门未启用的非拉黑供应商
+            filteredSuppliers = filteredSuppliers.filter(s => 
+              !enabledSupplierIds.has(s.id) && s.is_blacklisted !== true
+            );
+            break;
+          case 'blacklist':
+            // 拉黑异议库：所有被拉黑的供应商（异议供应商在导入时标记）
+            filteredSuppliers = filteredSuppliers.filter(s => s.is_blacklisted === true);
+            break;
+          default:
+            break;
+        }
 
         // 合并供应商数据与启用状态
-        const suppliers = allSuppliers?.map(s => ({
+        const suppliers = filteredSuppliers.map(s => ({
           ...s,
           library_type: enabledSupplierIds.has(s.id) ? 'current' : 'disabled',
-        })) || [];
+        }));
 
         return new Response(
           JSON.stringify({ suppliers }),
