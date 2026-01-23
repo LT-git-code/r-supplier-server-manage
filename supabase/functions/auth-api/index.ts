@@ -381,6 +381,152 @@ serve(async (req) => {
         );
       }
 
+      // ========== 手机验证码注册（供应商专用）==========
+      case 'send_register_phone_code': {
+        const { phone } = params;
+        if (!phone || !isValidPhone(phone)) {
+          return new Response(
+            JSON.stringify({ error: '请输入有效的手机号' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 检查手机号是否已被注册
+        const { data: existingProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('user_id')
+          .eq('phone', phone)
+          .maybeSingle();
+
+        if (existingProfile) {
+          return new Response(
+            JSON.stringify({ error: '该手机号已被注册' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const code = generateCode();
+        const expiresAt = Date.now() + 10 * 60 * 1000;
+        verificationCodes.set(`register_phone_${phone}`, { code, expiresAt, type: 'phone' });
+
+        console.log(`Register phone verification code for ${phone}: ${code}`);
+
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: '验证码已发送',
+            code: code
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'phone_register': {
+        const { phone, code, password } = params;
+        if (!phone || !code || !password) {
+          return new Response(
+            JSON.stringify({ error: '请提供完整信息' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (password.length < 6) {
+          return new Response(
+            JSON.stringify({ error: '密码至少需要6个字符' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 验证验证码
+        const stored = verificationCodes.get(`register_phone_${phone}`);
+        if (!stored) {
+          return new Response(
+            JSON.stringify({ error: '验证码不存在或已过期，请重新获取' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (Date.now() > stored.expiresAt) {
+          verificationCodes.delete(`register_phone_${phone}`);
+          return new Response(
+            JSON.stringify({ error: '验证码已过期，请重新获取' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (stored.code !== code) {
+          return new Response(
+            JSON.stringify({ error: '验证码错误' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 再次检查手机号是否已被注册
+        const { data: existingProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('user_id')
+          .eq('phone', phone)
+          .maybeSingle();
+
+        if (existingProfile) {
+          verificationCodes.delete(`register_phone_${phone}`);
+          return new Response(
+            JSON.stringify({ error: '该手机号已被注册' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 生成一个临时邮箱用于注册（Supabase要求邮箱）
+        const tempEmail = `${phone}@phone.supplier.local`;
+
+        // 创建用户
+        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          email: tempEmail,
+          password: password,
+          email_confirm: true, // 自动确认邮箱
+        });
+
+        if (createError) {
+          console.error('Create user error:', createError);
+          return new Response(
+            JSON.stringify({ error: '注册失败，请稍后重试' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 更新 profile 中的手机号
+        const { error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .update({ phone: phone })
+          .eq('user_id', newUser.user.id);
+
+        if (profileError) {
+          console.error('Update profile error:', profileError);
+        }
+
+        // 分配供应商角色
+        const { error: roleError } = await supabaseAdmin
+          .from('user_roles')
+          .insert({ user_id: newUser.user.id, role: 'supplier' });
+
+        if (roleError) {
+          console.error('Assign role error:', roleError);
+        }
+
+        // 删除验证码
+        verificationCodes.delete(`register_phone_${phone}`);
+
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: '注册成功',
+            email: tempEmail,
+            password: password
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: '未知操作' }),

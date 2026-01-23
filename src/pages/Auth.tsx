@@ -12,6 +12,7 @@ import { LoginAnnouncements } from '@/components/auth/LoginAnnouncements';
 import { ComplaintDialog } from '@/components/auth/ComplaintDialog';
 import { ForgotPasswordDialog } from '@/components/auth/ForgotPasswordDialog';
 import { PhoneLoginForm } from '@/components/auth/PhoneLoginForm';
+import { PhoneRegisterForm } from '@/components/auth/PhoneRegisterForm';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('请输入有效的邮箱地址');
@@ -19,6 +20,7 @@ const passwordSchema = z.string().min(6, '密码至少需要6个字符');
 
 type RegisterRole = 'supplier' | 'department' | null;
 type LoginMethod = 'email' | 'phone';
+type SupplierRegisterMethod = 'email' | 'phone';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -34,6 +36,7 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<RegisterRole>(null);
+  const [supplierRegisterMethod, setSupplierRegisterMethod] = useState<SupplierRegisterMethod>('email');
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
 
   useEffect(() => {
@@ -200,21 +203,116 @@ export default function Auth() {
     </div>
   );
 
-  // 注册表单
-  const renderRegisterForm = () => (
+  // 供应商注册表单（支持邮箱和手机两种方式）
+  const renderSupplierRegisterForm = () => (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+        <Building2 className="h-5 w-5 text-primary" />
+        <span className="text-sm font-medium">供应商注册</span>
+        <button
+          type="button"
+          className="ml-auto text-xs text-primary hover:underline"
+          onClick={handleBackToRoleSelect}
+        >
+          更换身份
+        </button>
+      </div>
+
+      {/* 注册方式切换 */}
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant={supplierRegisterMethod === 'email' ? 'default' : 'outline'}
+          size="sm"
+          className="flex-1"
+          onClick={() => { setSupplierRegisterMethod('email'); setError(null); }}
+        >
+          <Mail className="mr-2 h-4 w-4" />
+          邮箱注册
+        </Button>
+        <Button
+          type="button"
+          variant={supplierRegisterMethod === 'phone' ? 'default' : 'outline'}
+          size="sm"
+          className="flex-1"
+          onClick={() => { setSupplierRegisterMethod('phone'); setError(null); }}
+        >
+          <Smartphone className="mr-2 h-4 w-4" />
+          手机快速注册
+        </Button>
+      </div>
+
+      {supplierRegisterMethod === 'email' ? (
+        <form onSubmit={handleRegister} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="register-email">邮箱</Label>
+            <Input
+              id="register-email"
+              type="email"
+              placeholder="请输入邮箱"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isSubmitting}
+              required
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="register-password">密码</Label>
+            <Input
+              id="register-password"
+              type="password"
+              placeholder="至少6个字符"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isSubmitting}
+              required
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="register-confirm">确认密码</Label>
+            <Input
+              id="register-confirm"
+              type="password"
+              placeholder="请再次输入密码"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={isSubmitting}
+              required
+            />
+          </div>
+          
+          <Alert>
+            <Building2 className="h-4 w-4" />
+            <AlertDescription>
+              注册后需要填写供应商详细信息并等待审核
+            </AlertDescription>
+          </Alert>
+          
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                注册中...
+              </>
+            ) : (
+              '注册'
+            )}
+          </Button>
+        </form>
+      ) : (
+        <PhoneRegisterForm onSuccess={() => navigate('/supplier/register')} />
+      )}
+    </div>
+  );
+
+  // 部门注册表单
+  const renderDepartmentRegisterForm = () => (
     <form onSubmit={handleRegister} className="space-y-4">
       <div className="flex items-center gap-2 p-3 bg-muted rounded-lg mb-4">
-        {selectedRole === 'supplier' ? (
-          <>
-            <Building2 className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium">供应商注册</span>
-          </>
-        ) : (
-          <>
-            <Users className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium">部门人员注册</span>
-          </>
-        )}
+        <Users className="h-5 w-5 text-primary" />
+        <span className="text-sm font-medium">部门人员注册</span>
         <button
           type="button"
           className="ml-auto text-xs text-primary hover:underline"
@@ -263,23 +361,12 @@ export default function Auth() {
         />
       </div>
       
-      {selectedRole === 'department' && (
-        <Alert>
-          <ShieldCheck className="h-4 w-4" />
-          <AlertDescription>
-            部门人员注册后即可登录使用系统
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      {selectedRole === 'supplier' && (
-        <Alert>
-          <Building2 className="h-4 w-4" />
-          <AlertDescription>
-            注册后需要填写供应商详细信息并等待审核
-          </AlertDescription>
-        </Alert>
-      )}
+      <Alert>
+        <ShieldCheck className="h-4 w-4" />
+        <AlertDescription>
+          部门人员注册后即可登录使用系统
+        </AlertDescription>
+      </Alert>
       
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? (
@@ -293,6 +380,14 @@ export default function Auth() {
       </Button>
     </form>
   );
+
+  // 注册表单入口
+  const renderRegisterForm = () => {
+    if (selectedRole === 'supplier') {
+      return renderSupplierRegisterForm();
+    }
+    return renderDepartmentRegisterForm();
+  };
 
   // 登录表单 - 邮箱密码
   const renderEmailLoginForm = () => (
