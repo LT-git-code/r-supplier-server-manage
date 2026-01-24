@@ -617,6 +617,10 @@ serve(async (req) => {
             // }
             // ============================================
 
+            // 为部门导入的供应商生成唯一的临时用户ID
+            // 因为 user_id 有唯一约束，每个供应商需要一个唯一的 user_id
+            const tempUserId = crypto.randomUUID();
+
             // 创建供应商记录（状态直接设为已批准，因为是部门导入）
             const { data: newSupplier, error: insertError } = await supabaseAdmin
               .from('suppliers')
@@ -625,7 +629,7 @@ serve(async (req) => {
                 supplier_type: supplierType,
                 contact_name: s.contact_name?.trim() || null,
                 contact_phone: s.contact_phone?.trim() || null,
-                user_id: user.id, // 关联到当前用户
+                user_id: tempUserId, // 使用临时唯一ID，部门导入的供应商没有关联真实用户
                 status: 'approved',
                 is_recommended: tagData.is_recommended,
                 is_blacklisted: tagData.is_blacklisted,
