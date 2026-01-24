@@ -6,6 +6,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// 将字符串用 * 遮罩
+function maskString(str: string | null): string {
+  if (!str) return '-';
+  if (str.length <= 2) return '*'.repeat(str.length);
+  return str[0] + '*'.repeat(str.length - 2) + str[str.length - 1];
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -159,14 +166,28 @@ serve(async (req) => {
 
         if (suppliersError) throw suppliersError;
 
-        // 获取本部门的启用状态
+        // 获取本部门的启用状态和隐藏状态
         const { data: deptSuppliers } = await supabaseAdmin
           .from('department_suppliers')
-          .select('supplier_id, library_type')
+          .select('supplier_id, library_type, is_hidden, department_id')
           .eq('department_id', primaryDeptId);
+
+        // 获取其他部门标记为隐藏的供应商ID
+        const { data: hiddenByOthers } = await supabaseAdmin
+          .from('department_suppliers')
+          .select('supplier_id')
+          .eq('is_hidden', true)
+          .neq('department_id', primaryDeptId);
+
+        const hiddenByOtherDepts = new Set(hiddenByOthers?.map(h => h.supplier_id) || []);
 
         const enabledSupplierIds = new Set(
           deptSuppliers?.filter(ds => ds.library_type === 'current').map(ds => ds.supplier_id) || []
+        );
+
+        // 本部门隐藏的供应商ID
+        const myHiddenSupplierIds = new Set(
+          deptSuppliers?.filter(ds => ds.is_hidden === true).map(ds => ds.supplier_id) || []
         );
 
         // 根据Tab筛选供应商
@@ -195,14 +216,69 @@ serve(async (req) => {
             break;
         }
 
-        // 合并供应商数据与启用状态
-        const suppliers = filteredSuppliers.map(s => ({
-          ...s,
-          library_type: enabledSupplierIds.has(s.id) ? 'current' : 'disabled',
-        }));
+        // 合并供应商数据与启用状态、隐藏状态
+        const suppliers = filteredSuppliers.map(s => {
+          const isHiddenByOther = hiddenByOtherDepts.has(s.id);
+          const isHiddenByMe = myHiddenSupplierIds.has(s.id);
+          
+          return {
+            ...s,
+            // 如果是其他部门隐藏的，且不是在组织库中查看（组织库是自己的供应商），则隐藏联系信息
+            contact_name: (isHiddenByOther && libraryTab !== 'organization') ? maskString(s.contact_name) : s.contact_name,
+            contact_phone: (isHiddenByOther && libraryTab !== 'organization') ? maskString(s.contact_phone) : s.contact_phone,
+            library_type: enabledSupplierIds.has(s.id) ? 'current' : 'disabled',
+            is_hidden: isHiddenByMe,
+            is_hidden_by_other: isHiddenByOther,
+          };
+        });
 
         return new Response(
           JSON.stringify({ suppliers }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'toggle_supplier_hidden': {
+        const { supplierId, isHidden } = params;
+        
+        if (!primaryDeptId) {
+          return new Response(
+            JSON.stringify({ error: '系统中无可用部门' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 检查是否已存在记录
+        const { data: existing } = await supabaseAdmin
+          .from('department_suppliers')
+          .select('id')
+          .eq('supplier_id', supplierId)
+          .eq('department_id', primaryDeptId)
+          .maybeSingle();
+
+        if (existing) {
+          // 更新现有记录的隐藏状态
+          const { error } = await supabaseAdmin
+            .from('department_suppliers')
+            .update({ is_hidden: isHidden })
+            .eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          // 创建新记录（包含隐藏状态）
+          const { error } = await supabaseAdmin
+            .from('department_suppliers')
+            .insert({
+              department_id: primaryDeptId,
+              supplier_id: supplierId,
+              added_by: user.id,
+              library_type: 'current',
+              is_hidden: isHidden,
+            });
+          if (error) throw error;
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

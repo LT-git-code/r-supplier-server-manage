@@ -37,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Power, PowerOff, Upload, Building2, Star, FolderOpen, ShieldX, Eye, Filter, X } from 'lucide-react';
+import { Search, Power, PowerOff, Upload, Building2, Star, FolderOpen, ShieldX, Eye, Filter, X, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import SupplierImportDialog from '@/components/dept/SupplierImportDialog';
@@ -57,6 +57,8 @@ interface Supplier {
   library_type: string;
   is_recommended?: boolean;
   is_blacklisted?: boolean;
+  is_hidden?: boolean;
+  is_hidden_by_other?: boolean;
 }
 
 interface Filters {
@@ -159,6 +161,28 @@ export default function DeptSuppliers() {
       setConfirmDialog({ open: false, type: enable ? 'enable' : 'disable' });
     } catch (error) {
       console.error('Error toggling supplier:', error);
+      toast.error('操作失败');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleToggleHidden = async (supplier: Supplier) => {
+    setActionLoading(true);
+    try {
+      const newHiddenState = !supplier.is_hidden;
+      const { error } = await supabase.functions.invoke('dept-api', {
+        body: { 
+          action: 'toggle_supplier_hidden', 
+          supplierId: supplier.id,
+          isHidden: newHiddenState,
+        },
+      });
+      if (error) throw error;
+      toast.success(newHiddenState ? '供应商联系信息已对其他部门隐藏' : '供应商联系信息已取消隐藏');
+      fetchSuppliers(activeTab);
+    } catch (error) {
+      console.error('Error toggling hidden:', error);
       toast.error('操作失败');
     } finally {
       setActionLoading(false);
@@ -417,19 +441,31 @@ export default function DeptSuppliers() {
                             查看
                           </Button>
                           {showDisableAction && supplier.library_type === 'current' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setConfirmDialog({ 
-                                open: true, 
-                                type: 'disable', 
-                                supplier 
-                              })}
-                              disabled={actionLoading}
-                            >
-                              <PowerOff className="h-4 w-4 mr-1" />
-                              停用
-                            </Button>
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setConfirmDialog({ 
+                                  open: true, 
+                                  type: 'disable', 
+                                  supplier 
+                                })}
+                                disabled={actionLoading}
+                              >
+                                <PowerOff className="h-4 w-4 mr-1" />
+                                停用
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleHidden(supplier)}
+                                disabled={actionLoading}
+                                className={supplier.is_hidden ? 'text-orange-500' : ''}
+                              >
+                                <EyeOff className="h-4 w-4 mr-1" />
+                                {supplier.is_hidden ? '取消隐藏' : '隐藏'}
+                              </Button>
+                            </>
                           )}
                           {showEnableAction && supplier.library_type !== 'current' && (
                             <Button

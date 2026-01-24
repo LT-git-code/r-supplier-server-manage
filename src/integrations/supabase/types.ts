@@ -232,6 +232,7 @@ export type Database = {
           created_at: string
           department_id: string
           id: string
+          is_hidden: boolean
           library_type: string | null
           reason: string | null
           supplier_id: string
@@ -241,6 +242,7 @@ export type Database = {
           created_at?: string
           department_id: string
           id?: string
+          is_hidden?: boolean
           library_type?: string | null
           reason?: string | null
           supplier_id: string
@@ -250,6 +252,7 @@ export type Database = {
           created_at?: string
           department_id?: string
           id?: string
+          is_hidden?: boolean
           library_type?: string | null
           reason?: string | null
           supplier_id?: string

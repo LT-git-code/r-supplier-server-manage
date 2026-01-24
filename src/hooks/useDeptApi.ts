@@ -24,6 +24,7 @@ export function useDeptApi() {
     getSuppliers: (libraryTab?: string) => callApi('get_dept_suppliers', { libraryTab }),
     enableSupplier: (supplierId: string) => callApi('enable_supplier', { supplierId }),
     disableSupplier: (supplierId: string) => callApi('disable_supplier', { supplierId }),
+    toggleSupplierHidden: (supplierId: string, isHidden: boolean) => callApi('toggle_supplier_hidden', { supplierId, isHidden }),
     getSupplierDetail: (supplierId: string) => callApi('get_supplier_detail', { supplierId }),
 
     // Products
