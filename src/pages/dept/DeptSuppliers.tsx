@@ -30,7 +30,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Search, Power, PowerOff, Upload, Building2, Star, FolderOpen, ShieldX, Eye, Loader2, Paperclip } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Search, Power, PowerOff, Upload, Building2, Star, FolderOpen, ShieldX, Eye, Filter, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import SupplierImportDialog from '@/components/dept/SupplierImportDialog';
@@ -50,6 +57,13 @@ interface Supplier {
   library_type: string;
   is_recommended?: boolean;
   is_blacklisted?: boolean;
+}
+
+interface Filters {
+  tag: string;
+  type: string;
+  companyName: string;
+  contactName: string;
 }
 
 const TAB_CONFIG: Record<LibraryTab, { label: string; icon: React.ReactNode; description: string }> = {
@@ -75,10 +89,23 @@ const TAB_CONFIG: Record<LibraryTab, { label: string; icon: React.ReactNode; des
   },
 };
 
+const TAG_OPTIONS = [
+  { value: 'all', label: '全部标签' },
+  { value: 'recommended', label: '推荐' },
+  { value: 'normal', label: '普通' },
+  { value: 'blacklisted', label: '拉黑' },
+];
+
+const TYPE_OPTIONS = [
+  { value: 'all', label: '全部类型' },
+  { value: 'enterprise', label: '企业' },
+  { value: 'individual', label: '个人' },
+  { value: 'overseas', label: '境外' },
+];
+
 export default function DeptSuppliers() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<LibraryTab>('organization');
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -89,6 +116,13 @@ export default function DeptSuppliers() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [filters, setFilters] = useState<Filters>({
+    tag: 'all',
+    type: 'all',
+    companyName: '',
+    contactName: '',
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   const fetchSuppliers = async (tab: LibraryTab = activeTab) => {
     setLoading(true);
@@ -133,8 +167,19 @@ export default function DeptSuppliers() {
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as LibraryTab);
-    setSearch('');
+    resetFilters();
   };
+
+  const resetFilters = () => {
+    setFilters({
+      tag: 'all',
+      type: 'all',
+      companyName: '',
+      contactName: '',
+    });
+  };
+
+  const hasActiveFilters = filters.tag !== 'all' || filters.type !== 'all' || filters.companyName || filters.contactName;
 
   const getSupplierTypeBadge = (type: string) => {
     const variants: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
@@ -146,11 +191,25 @@ export default function DeptSuppliers() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const filteredSuppliers = suppliers.filter(s => 
-    s.company_name?.toLowerCase().includes(search.toLowerCase()) ||
-    s.contact_name?.toLowerCase().includes(search.toLowerCase()) ||
-    s.main_products?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredSuppliers = suppliers.filter(s => {
+    // 标签筛选
+    if (filters.tag !== 'all') {
+      if (filters.tag === 'recommended' && !s.is_recommended) return false;
+      if (filters.tag === 'blacklisted' && !s.is_blacklisted) return false;
+      if (filters.tag === 'normal' && (s.is_recommended || s.is_blacklisted)) return false;
+    }
+    
+    // 类型筛选
+    if (filters.type !== 'all' && s.supplier_type !== filters.type) return false;
+    
+    // 公司名称模糊搜索
+    if (filters.companyName && !s.company_name?.toLowerCase().includes(filters.companyName.toLowerCase())) return false;
+    
+    // 联系人模糊搜索
+    if (filters.contactName && !s.contact_name?.toLowerCase().includes(filters.contactName.toLowerCase())) return false;
+    
+    return true;
+  });
 
   // 根据不同Tab决定是否显示启用/停用操作
   const showEnableAction = activeTab === 'backup' || activeTab === 'premium';
@@ -192,18 +251,104 @@ export default function DeptSuppliers() {
               {TAB_CONFIG[activeTab].description}
               <span className="ml-2 font-medium text-foreground">
                 共 {suppliers.length} 个供应商
+                {hasActiveFilters && ` (已筛选 ${filteredSuppliers.length} 个)`}
               </span>
             </div>
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="搜索供应商名称、联系人或主营产品..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 w-64"
-              />
-            </div>
+            <Button
+              variant={showFilters ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="gap-2"
+            >
+              <Filter className="h-4 w-4" />
+              筛选
+              {hasActiveFilters && (
+                <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 text-xs flex items-center justify-center">
+                  !
+                </Badge>
+              )}
+            </Button>
           </div>
+
+          {/* 筛选区域 */}
+          {showFilters && (
+            <div className="mb-4 p-4 bg-muted/50 rounded-lg space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">筛选条件</span>
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 text-xs">
+                    <X className="h-3 w-3 mr-1" />
+                    清除筛选
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* 标签筛选 */}
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">标签</label>
+                  <Select
+                    value={filters.tag}
+                    onValueChange={(value) => setFilters(prev => ({ ...prev, tag: value }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="选择标签" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TAG_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 类型筛选 */}
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">类型</label>
+                  <Select
+                    value={filters.type}
+                    onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="选择类型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TYPE_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 公司名称搜索 */}
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">公司名称</label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="模糊搜索..."
+                      value={filters.companyName}
+                      onChange={(e) => setFilters(prev => ({ ...prev, companyName: e.target.value }))}
+                      className="h-9 pl-8"
+                    />
+                  </div>
+                </div>
+
+                {/* 联系人搜索 */}
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">联系人</label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="模糊搜索..."
+                      value={filters.contactName}
+                      onChange={(e) => setFilters(prev => ({ ...prev, contactName: e.target.value }))}
+                      className="h-9 pl-8"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="rounded-md border">
             <Table>
