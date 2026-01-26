@@ -135,8 +135,8 @@ export function EnterpriseStep2({ formData, updateFormData }: EnterpriseStep2Pro
         <Label htmlFor="production_capacity">生产能力</Label>
         <Textarea
           id="production_capacity"
-          placeholder="请描述您的生产能力或服务能力"
-          rows={3}
+          placeholder="请描述您的主要生产线、年产能、设备情况、技术人员数量等"
+          rows={4}
           value={formData.production_capacity}
           onChange={(e) => updateFormData({ production_capacity: e.target.value })}
         />
