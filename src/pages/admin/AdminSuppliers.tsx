@@ -77,6 +77,7 @@ import {
   Crown,
   AlertTriangle,
   Paperclip,
+  Download,
 } from 'lucide-react';
 
 interface SupplierProfile {
@@ -1183,6 +1184,18 @@ export default function AdminSuppliers() {
                             <div>发证日期：{q.issue_date || '-'}</div>
                             <div>有效期至：{q.expire_date || '-'}</div>
                           </div>
+                          {q.file_url && (
+                            <div className="mt-2 pt-2 border-t">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(q.file_url, '_blank')}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                下载附件
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

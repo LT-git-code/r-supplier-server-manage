@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useSupplierApi } from '@/hooks/useSupplierApi';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { QualificationFileUpload } from '@/components/supplier/QualificationFileUpload';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -92,6 +94,7 @@ const emptyQualification = {
 
 export default function SupplierQualifications() {
   const api = useSupplierApi();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,11 +104,24 @@ export default function SupplierQualifications() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingQualification, setEditingQualification] = useState<Partial<Qualification> | null>(null);
   const [deletingQualification, setDeletingQualification] = useState<Qualification | null>(null);
+  const [supplierId, setSupplierId] = useState<string>('');
 
   useEffect(() => {
     loadQualifications();
     loadQualificationTypes();
+    loadSupplierId();
   }, []);
+
+  const loadSupplierId = async () => {
+    try {
+      const info = await api.getSupplierInfo();
+      if (info?.id) {
+        setSupplierId(info.id);
+      }
+    } catch (error) {
+      console.error('Failed to load supplier id:', error);
+    }
+  };
 
   const loadQualifications = async () => {
     try {
@@ -318,6 +334,7 @@ export default function SupplierQualifications() {
                   <TableHead>证书编号</TableHead>
                   <TableHead>颁发机构</TableHead>
                   <TableHead>有效期</TableHead>
+                  <TableHead>附件</TableHead>
                   <TableHead>审核状态</TableHead>
                   <TableHead>临期提醒</TableHead>
                   <TableHead className="text-right">操作</TableHead>
@@ -334,6 +351,20 @@ export default function SupplierQualifications() {
                       {qualification.expire_date
                         ? format(new Date(qualification.expire_date), 'yyyy-MM-dd')
                         : '长期有效'}
+                    </TableCell>
+                    <TableCell>
+                      {qualification.file_url ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(qualification.file_url, '_blank')}
+                        >
+                          <FileCheck className="h-4 w-4 mr-1" />
+                          查看
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">未上传</span>
+                      )}
                     </TableCell>
                     <TableCell>{getStatusBadge(qualification.status)}</TableCell>
                     <TableCell>{getExpiryStatus(qualification.expire_date)}</TableCell>
@@ -436,14 +467,16 @@ export default function SupplierQualifications() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="file_url">证书文件URL</Label>
-              <Input
-                id="file_url"
-                placeholder="上传证书后填写文件URL"
-                value={editingQualification?.file_url || ''}
-                onChange={e => updateQualificationField('file_url', e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">文件上传功能开发中，请先填写文件URL</p>
+              <Label>资质附件</Label>
+              {supplierId ? (
+                <QualificationFileUpload
+                  supplierId={supplierId}
+                  fileUrl={editingQualification?.file_url || ''}
+                  onChange={(url) => updateQualificationField('file_url', url)}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">加载中...</p>
+              )}
             </div>
           </div>
           <DialogFooter>

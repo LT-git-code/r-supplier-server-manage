@@ -37,11 +37,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Power, PowerOff, Upload, Building2, Star, FolderOpen, ShieldX, Eye, Filter, X, EyeOff } from 'lucide-react';
+import { Search, Power, PowerOff, Upload, Building2, Star, FolderOpen, ShieldX, Eye, Filter, X, EyeOff, FileCheck, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import SupplierImportDialog from '@/components/dept/SupplierImportDialog';
 import { AttachmentUpload } from '@/components/supplier/AttachmentUpload';
+import { SupplierQualificationsView } from '@/components/dept/SupplierQualificationsView';
 
 type LibraryTab = 'organization' | 'premium' | 'backup' | 'blacklist';
 
@@ -603,13 +604,18 @@ export default function DeptSuppliers() {
 
               <Separator />
 
-              {/* 附件信息 */}
-              <Tabs defaultValue="capacity" className="w-full">
-                <TabsList className="w-full grid grid-cols-3">
+              {/* 附件与资质信息 */}
+              <Tabs defaultValue="qualifications" className="w-full">
+                <TabsList className="w-full grid grid-cols-4">
+                  <TabsTrigger value="qualifications">资质证书</TabsTrigger>
                   <TabsTrigger value="capacity">生产能力</TabsTrigger>
                   <TabsTrigger value="finance">财务状况</TabsTrigger>
                   <TabsTrigger value="cases">过往案例</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="qualifications" className="mt-4">
+                  <SupplierQualificationsView supplierId={selectedSupplier.id} />
+                </TabsContent>
 
                 <TabsContent value="capacity" className="mt-4">
                   <AttachmentUpload
