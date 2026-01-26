@@ -60,23 +60,28 @@ serve(async (req) => {
       );
     }
 
-    // 获取用户所属部门（仅用于插入记录时的外键）
+    // 获取用户所属部门ID列表
     const { data: userDepts } = await supabaseAdmin
       .from('user_departments')
       .select('department_id')
       .eq('user_id', user.id);
 
-    let primaryDeptId = userDepts?.[0]?.department_id;
+    let userDeptIds: string[] = userDepts?.map(ud => ud.department_id) || [];
+    let primaryDeptId = userDeptIds[0];
     
     // 如果用户未分配部门，使用系统中的第一个部门作为默认
-    if (!primaryDeptId) {
+    if (!primaryDeptId || userDeptIds.length === 0) {
       const { data: defaultDept } = await supabaseAdmin
         .from('departments')
         .select('id')
         .eq('is_active', true)
+        .order('created_at', { ascending: true })
         .limit(1)
-        .single();
-      primaryDeptId = defaultDept?.id;
+        .maybeSingle();
+      if (defaultDept?.id) {
+        primaryDeptId = defaultDept.id;
+        userDeptIds = [defaultDept.id];
+      }
     }
 
     const { action, ...params } = await req.json();
@@ -182,11 +187,11 @@ serve(async (req) => {
           supplierProductsMap.set(p.supplier_id, products);
         });
 
-        // 获取本部门的启用状态和隐藏状态
+        // 获取本部门的启用状态和隐藏状态（使用用户的所有部门）
         const { data: deptSuppliers } = await supabaseAdmin
           .from('department_suppliers')
           .select('supplier_id, library_type, is_hidden, department_id')
-          .eq('department_id', primaryDeptId);
+          .in('department_id', userDeptIds);
 
         // 获取其他部门标记为隐藏的供应商ID
         const { data: hiddenByOthers } = await supabaseAdmin
