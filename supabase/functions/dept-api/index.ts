@@ -66,23 +66,9 @@ serve(async (req) => {
       .select('department_id')
       .eq('user_id', user.id);
 
-    let userDeptIds: string[] = userDepts?.map(ud => ud.department_id) || [];
-    let primaryDeptId = userDeptIds[0];
-    
-    // 如果用户未分配部门，使用系统中的第一个部门作为默认
-    if (!primaryDeptId || userDeptIds.length === 0) {
-      const { data: defaultDept } = await supabaseAdmin
-        .from('departments')
-        .select('id')
-        .eq('is_active', true)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (defaultDept?.id) {
-        primaryDeptId = defaultDept.id;
-        userDeptIds = [defaultDept.id];
-      }
-    }
+    const userDeptIds: string[] = userDepts?.map(ud => ud.department_id) || [];
+    const primaryDeptId = userDeptIds[0];
+    const hasNoDepartment = userDeptIds.length === 0;
 
     const { action, ...params } = await req.json();
     console.log('Dept API action:', action, params);
@@ -161,6 +147,14 @@ serve(async (req) => {
 
       case 'get_dept_suppliers': {
         const { libraryTab = 'organization' } = params;
+        
+        // 如果用户未绑定部门，返回空结果
+        if (hasNoDepartment) {
+          return new Response(
+            JSON.stringify({ suppliers: [] }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
         
         // 获取所有已批准的供应商，包含推荐和拉黑状态
         const { data: allSuppliers, error: suppliersError } = await supabaseAdmin
@@ -266,9 +260,9 @@ serve(async (req) => {
       case 'toggle_supplier_hidden': {
         const { supplierId, isHidden } = params;
         
-        if (!primaryDeptId) {
+        if (hasNoDepartment) {
           return new Response(
-            JSON.stringify({ error: '系统中无可用部门' }),
+            JSON.stringify({ error: '该用户未绑定部门' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -311,9 +305,9 @@ serve(async (req) => {
       case 'enable_supplier': {
         const { supplierId } = params;
         
-        if (!primaryDeptId) {
+        if (hasNoDepartment) {
           return new Response(
-            JSON.stringify({ error: '系统中无可用部门' }),
+            JSON.stringify({ error: '该用户未绑定部门' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -605,9 +599,10 @@ serve(async (req) => {
           );
         }
 
-        if (!primaryDeptId) {
+        // 检查用户是否绑定部门
+        if (hasNoDepartment) {
           return new Response(
-            JSON.stringify({ error: '系统中无可用部门' }),
+            JSON.stringify({ error: '该用户未绑定部门' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
