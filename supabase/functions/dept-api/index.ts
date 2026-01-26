@@ -318,23 +318,19 @@ serve(async (req) => {
           );
         }
 
-        // 检查是否已存在任何部门的记录
-        const { data: existing } = await supabaseAdmin
+        // 检查当前用户部门是否已存在该供应商的记录
+        const { data: existingForMyDept } = await supabaseAdmin
           .from('department_suppliers')
-          .select('id, department_id')
+          .select('id')
           .eq('supplier_id', supplierId)
-          .limit(1)
+          .eq('department_id', primaryDeptId)
           .maybeSingle();
 
-        if (existing) {
-          // 更新现有记录为启用
-          const { error } = await supabaseAdmin
-            .from('department_suppliers')
-            .update({ library_type: 'current' })
-            .eq('supplier_id', supplierId);
-          if (error) throw error;
+        if (existingForMyDept) {
+          // 当前部门已有记录，无需重复添加
+          console.log('Supplier already associated with this department');
         } else {
-          // 创建新记录
+          // 为当前部门创建新的关联记录
           const { error } = await supabaseAdmin
             .from('department_suppliers')
             .insert({
