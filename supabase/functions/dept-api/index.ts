@@ -362,11 +362,19 @@ serve(async (req) => {
       case 'disable_supplier': {
         const { supplierId } = params;
 
-        // 更新所有该供应商的记录为停用
+        if (hasNoDepartment) {
+          return new Response(
+            JSON.stringify({ error: '该用户未绑定部门' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 删除该供应商与当前部门的关联记录
         const { error } = await supabaseAdmin
           .from('department_suppliers')
-          .update({ library_type: 'disabled' })
-          .eq('supplier_id', supplierId);
+          .delete()
+          .eq('supplier_id', supplierId)
+          .eq('department_id', primaryDeptId);
 
         if (error) throw error;
 
