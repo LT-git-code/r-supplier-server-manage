@@ -713,16 +713,88 @@ serve(async (req) => {
             // }
             // ============================================
 
-            // 创建供应商记录（状态直接设为已批准，因为是部门导入）
-            // 关联到当前导入用户
+            // 验证联系电话（用于创建用户账号）
+            const contactPhone = s.contact_phone?.trim();
+            if (!contactPhone) {
+              failedList.push({
+                row,
+                company_name: s.company_name,
+                reason: '联系电话不能为空（用于创建登录账号）',
+                data: s,
+              });
+              continue;
+            }
+
+            // 检查手机号是否已被其他用户使用
+            const tempEmail = `${contactPhone}@phone.supplier.local`;
+            const { data: existingAuthUser } = await supabaseAdmin.auth.admin.listUsers();
+            const phoneExists = existingAuthUser?.users?.some(u => 
+              u.email === tempEmail || u.phone === contactPhone
+            );
+            
+            if (phoneExists) {
+              failedList.push({
+                row,
+                company_name: s.company_name,
+                reason: `手机号 ${contactPhone} 已被注册`,
+                data: s,
+              });
+              continue;
+            }
+
+            // 1. 创建auth用户（使用手机号生成临时邮箱）
+            const defaultPassword = `Supplier_${contactPhone.slice(-4)}_${Date.now().toString(36)}`;
+            const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+              email: tempEmail,
+              password: defaultPassword,
+              email_confirm: true,
+              user_metadata: {
+                phone: contactPhone,
+                full_name: s.contact_name?.trim() || s.company_name.trim(),
+              },
+            });
+
+            if (authError || !authUser.user) {
+              console.error('Create auth user error:', authError);
+              failedList.push({
+                row,
+                company_name: s.company_name,
+                reason: `创建用户账号失败: ${authError?.message || '未知错误'}`,
+                data: s,
+              });
+              continue;
+            }
+
+            // 2. 为新用户分配supplier角色
+            const { error: roleError } = await supabaseAdmin
+              .from('user_roles')
+              .insert({
+                user_id: authUser.user.id,
+                role: 'supplier',
+              });
+
+            if (roleError) {
+              console.error('Assign role error:', roleError);
+              // 回滚：删除刚创建的用户
+              await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+              failedList.push({
+                row,
+                company_name: s.company_name,
+                reason: `分配角色失败: ${roleError.message}`,
+                data: s,
+              });
+              continue;
+            }
+
+            // 3. 创建供应商记录，关联到新创建的用户
             const { data: newSupplier, error: insertError } = await supabaseAdmin
               .from('suppliers')
               .insert({
                 company_name: s.company_name.trim(),
                 supplier_type: supplierType,
                 contact_name: s.contact_name?.trim() || null,
-                contact_phone: s.contact_phone?.trim() || null,
-                user_id: user.id, // 关联到当前导入用户
+                contact_phone: contactPhone,
+                user_id: authUser.user.id, // 关联到新创建的用户
                 status: 'approved',
                 is_recommended: tagData.is_recommended,
                 is_blacklisted: tagData.is_blacklisted,
@@ -737,18 +809,20 @@ serve(async (req) => {
 
             if (insertError) {
               console.error('Insert supplier error:', insertError);
+              // 回滚：删除刚创建的用户和角色
+              await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
               failedList.push({
                 row,
                 company_name: s.company_name,
-                reason: `数据库错误: ${insertError.message}`,
+                reason: `创建供应商数据失败: ${insertError.message}`,
                 data: s,
               });
               continue;
             }
 
-            // 创建部门-供应商关联（默认启用）
+            // 4. 创建部门-供应商关联（默认启用）
             const libraryType = tagData.is_blacklisted ? 'disabled' : 'current';
-            await supabaseAdmin
+            const { error: deptSupplierError } = await supabaseAdmin
               .from('department_suppliers')
               .insert({
                 department_id: primaryDeptId,
@@ -758,11 +832,16 @@ serve(async (req) => {
                 reason: `批量导入 - 采购员: ${s.buyer_name || '未指定'}`,
               });
 
+            if (deptSupplierError) {
+              console.error('Insert dept supplier error:', deptSupplierError);
+              // 继续处理，但记录警告（供应商已创建成功）
+            }
+
             successList.push({
               company_name: s.company_name,
               supplier_type: supplierType,
               contact_name: s.contact_name || '',
-              contact_phone: s.contact_phone || '',
+              contact_phone: contactPhone,
               buyer_name: s.buyer_name || '',
               cooperation_tag: s.cooperation_tag || '',
             });
