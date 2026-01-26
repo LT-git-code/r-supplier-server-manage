@@ -166,6 +166,22 @@ serve(async (req) => {
 
         if (suppliersError) throw suppliersError;
 
+        // 获取所有供应商的产品信息，用于按产品名称筛选
+        const supplierIds = allSuppliers?.map(s => s.id) || [];
+        const { data: allProducts } = await supabaseAdmin
+          .from('products')
+          .select('id, name, supplier_id')
+          .in('supplier_id', supplierIds)
+          .eq('is_active', true);
+
+        // 构建供应商ID到产品名称的映射
+        const supplierProductsMap = new Map<string, string[]>();
+        allProducts?.forEach(p => {
+          const products = supplierProductsMap.get(p.supplier_id) || [];
+          products.push(p.name);
+          supplierProductsMap.set(p.supplier_id, products);
+        });
+
         // 获取本部门的启用状态和隐藏状态
         const { data: deptSuppliers } = await supabaseAdmin
           .from('department_suppliers')
@@ -199,13 +215,15 @@ serve(async (req) => {
             filteredSuppliers = filteredSuppliers.filter(s => enabledSupplierIds.has(s.id));
             break;
           case 'premium':
-            // 优质库：所有标签为推荐的供应商
-            filteredSuppliers = filteredSuppliers.filter(s => s.is_recommended === true);
+            // 优质库：标签为推荐的供应商，但排除本部门已启用的
+            filteredSuppliers = filteredSuppliers.filter(s => 
+              s.is_recommended === true && !enabledSupplierIds.has(s.id)
+            );
             break;
           case 'backup':
-            // 备选库：本部门未启用的非拉黑供应商
+            // 备选库：本部门未启用的非拉黑非推荐供应商
             filteredSuppliers = filteredSuppliers.filter(s => 
-              !enabledSupplierIds.has(s.id) && s.is_blacklisted !== true
+              !enabledSupplierIds.has(s.id) && s.is_blacklisted !== true && s.is_recommended !== true
             );
             break;
           case 'blacklist':
@@ -216,10 +234,11 @@ serve(async (req) => {
             break;
         }
 
-        // 合并供应商数据与启用状态、隐藏状态
+        // 合并供应商数据与启用状态、隐藏状态、产品名称
         const suppliers = filteredSuppliers.map(s => {
           const isHiddenByOther = hiddenByOtherDepts.has(s.id);
           const isHiddenByMe = myHiddenSupplierIds.has(s.id);
+          const productNames = supplierProductsMap.get(s.id) || [];
           
           return {
             ...s,
@@ -229,6 +248,7 @@ serve(async (req) => {
             library_type: enabledSupplierIds.has(s.id) ? 'current' : 'disabled',
             is_hidden: isHiddenByMe,
             is_hidden_by_other: isHiddenByOther,
+            product_names: productNames,
           };
         });
 

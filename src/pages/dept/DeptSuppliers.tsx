@@ -59,6 +59,7 @@ interface Supplier {
   is_blacklisted?: boolean;
   is_hidden?: boolean;
   is_hidden_by_other?: boolean;
+  product_names?: string[];
 }
 
 interface Filters {
@@ -66,6 +67,7 @@ interface Filters {
   type: string;
   companyName: string;
   contactName: string;
+  productName: string;
 }
 
 const TAB_CONFIG: Record<LibraryTab, { label: string; icon: React.ReactNode; description: string }> = {
@@ -123,6 +125,7 @@ export default function DeptSuppliers() {
     type: 'all',
     companyName: '',
     contactName: '',
+    productName: '',
   });
   const [showFilters, setShowFilters] = useState(false);
 
@@ -200,10 +203,11 @@ export default function DeptSuppliers() {
       type: 'all',
       companyName: '',
       contactName: '',
+      productName: '',
     });
   };
 
-  const hasActiveFilters = filters.tag !== 'all' || filters.type !== 'all' || filters.companyName || filters.contactName;
+  const hasActiveFilters = filters.tag !== 'all' || filters.type !== 'all' || filters.companyName || filters.contactName || filters.productName;
 
   const getSupplierTypeBadge = (type: string) => {
     const variants: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
@@ -231,6 +235,14 @@ export default function DeptSuppliers() {
     
     // 联系人模糊搜索
     if (filters.contactName && !s.contact_name?.toLowerCase().includes(filters.contactName.toLowerCase())) return false;
+    
+    // 产品名称模糊搜索
+    if (filters.productName) {
+      const productMatch = s.product_names?.some(name => 
+        name.toLowerCase().includes(filters.productName.toLowerCase())
+      );
+      if (!productMatch) return false;
+    }
     
     return true;
   });
@@ -306,7 +318,7 @@ export default function DeptSuppliers() {
                   </Button>
                 )}
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {/* 标签筛选 */}
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">标签</label>
@@ -366,6 +378,20 @@ export default function DeptSuppliers() {
                       placeholder="模糊搜索..."
                       value={filters.contactName}
                       onChange={(e) => setFilters(prev => ({ ...prev, contactName: e.target.value }))}
+                      className="h-9 pl-8"
+                    />
+                  </div>
+                </div>
+
+                {/* 产品名称搜索 */}
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">产品名称</label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="模糊搜索..."
+                      value={filters.productName}
+                      onChange={(e) => setFilters(prev => ({ ...prev, productName: e.target.value }))}
                       className="h-9 pl-8"
                     />
                   </div>
