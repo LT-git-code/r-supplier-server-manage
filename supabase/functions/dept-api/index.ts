@@ -385,10 +385,19 @@ serve(async (req) => {
       }
 
       case 'get_dept_products': {
-        // 获取全局启用的供应商ID列表
+        // 如果用户未绑定部门，返回空结果
+        if (hasNoDepartment) {
+          return new Response(
+            JSON.stringify({ products: [] }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // 获取本部门启用的供应商ID列表（只显示本部门关联的供应商产品）
         const { data: enabledSuppliers } = await supabaseAdmin
           .from('department_suppliers')
           .select('supplier_id')
+          .in('department_id', userDeptIds)
           .eq('library_type', 'current');
         
         const supplierIds = enabledSuppliers?.map(s => s.supplier_id) || [];
