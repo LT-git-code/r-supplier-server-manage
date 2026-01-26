@@ -159,7 +159,7 @@ serve(async (req) => {
         // 获取所有已批准的供应商，包含推荐、拉黑、异议状态
         const { data: allSuppliers, error: suppliersError } = await supabaseAdmin
           .from('suppliers')
-          .select('id, company_name, supplier_type, contact_name, contact_phone, status, main_products, is_recommended, is_blacklisted, has_objection')
+          .select('id, company_name, supplier_type, contact_name, contact_phone, status, main_products, production_capacity, annual_revenue, employee_count, is_recommended, is_blacklisted, has_objection')
           .eq('status', 'approved')
           .order('company_name');
 

@@ -54,6 +54,9 @@ interface Supplier {
   contact_phone: string;
   status: string;
   main_products: string;
+  production_capacity?: string;
+  annual_revenue?: number;
+  employee_count?: number;
   dept_supplier_id: string | null;
   library_type: string;
   is_recommended?: boolean;
@@ -617,7 +620,22 @@ export default function DeptSuppliers() {
                   <SupplierQualificationsView supplierId={selectedSupplier.id} />
                 </TabsContent>
 
-                <TabsContent value="capacity" className="mt-4">
+                <TabsContent value="capacity" className="mt-4 space-y-4">
+                  {/* 生产能力文字描述 */}
+                  {selectedSupplier.production_capacity && (
+                    <div className="p-3 bg-muted rounded-lg">
+                      <h5 className="text-sm font-medium mb-2">生产能力描述</h5>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                        {selectedSupplier.production_capacity}
+                      </p>
+                    </div>
+                  )}
+                  {selectedSupplier.employee_count && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">员工人数：</span>
+                      <span>{selectedSupplier.employee_count} 人</span>
+                    </div>
+                  )}
                   <AttachmentUpload
                     supplierId={selectedSupplier.id}
                     category="capacity"
@@ -627,7 +645,16 @@ export default function DeptSuppliers() {
                   />
                 </TabsContent>
 
-                <TabsContent value="finance" className="mt-4">
+                <TabsContent value="finance" className="mt-4 space-y-4">
+                  {/* 财务状况文字信息 */}
+                  {selectedSupplier.annual_revenue && (
+                    <div className="p-3 bg-muted rounded-lg">
+                      <h5 className="text-sm font-medium mb-2">年营收</h5>
+                      <p className="text-lg font-semibold">
+                        ¥ {selectedSupplier.annual_revenue.toLocaleString('zh-CN')} 元
+                      </p>
+                    </div>
+                  )}
                   <AttachmentUpload
                     supplierId={selectedSupplier.id}
                     category="finance"
