@@ -181,15 +181,26 @@ serve(async (req) => {
           supplierProductsMap.set(p.supplier_id, products);
         });
 
-        // 获取本部门关联的供应商记录（用户所在部门）
+        // 获取本部门关联的供应商记录（用于组织库显示）
         const { data: myDeptSuppliers } = await supabaseAdmin
           .from('department_suppliers')
           .select('supplier_id, library_type, is_hidden, department_id')
           .in('department_id', userDeptIds);
 
-        // 本部门已关联的供应商ID集合
+        // 本部门已关联的供应商ID集合（用于组织库）
         const myDeptSupplierIds = new Set(
           myDeptSuppliers?.map(ds => ds.supplier_id) || []
+        );
+
+        // 获取所有部门已启用的供应商ID（全局启用机制）
+        const { data: allEnabledSuppliers } = await supabaseAdmin
+          .from('department_suppliers')
+          .select('supplier_id')
+          .eq('library_type', 'current');
+
+        // 全局已启用的供应商ID集合（用于优质库/备选库排除）
+        const globalEnabledSupplierIds = new Set(
+          allEnabledSuppliers?.map(ds => ds.supplier_id) || []
         );
 
         // 获取其他部门标记为隐藏的供应商ID
@@ -215,15 +226,15 @@ serve(async (req) => {
             filteredSuppliers = filteredSuppliers.filter(s => myDeptSupplierIds.has(s.id));
             break;
           case 'premium':
-            // 优质库：未被启用（不在本部门关联表中）+ 标签为推荐
+            // 优质库：未被任何部门启用 + 标签为推荐
             filteredSuppliers = filteredSuppliers.filter(s => 
-              !myDeptSupplierIds.has(s.id) && s.is_recommended === true
+              !globalEnabledSupplierIds.has(s.id) && s.is_recommended === true
             );
             break;
           case 'backup':
-            // 备选库：未被启用 + 非拉黑 + 非异议 + 非推荐
+            // 备选库：未被任何部门启用 + 非拉黑 + 非异议 + 非推荐
             filteredSuppliers = filteredSuppliers.filter(s => 
-              !myDeptSupplierIds.has(s.id) && 
+              !globalEnabledSupplierIds.has(s.id) && 
               s.is_blacklisted !== true && 
               s.has_objection !== true && 
               s.is_recommended !== true
