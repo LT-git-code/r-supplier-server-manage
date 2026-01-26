@@ -122,8 +122,8 @@ export function IndividualStep2({ formData, updateFormData }: IndividualStep2Pro
         <Label htmlFor="production_capacity">服务能力</Label>
         <Textarea
           id="production_capacity"
-          placeholder="请描述您的服务能力、可接单量等"
-          rows={3}
+          placeholder="请描述您的主要服务项目、年接单量、设备情况、技术人员数量等"
+          rows={4}
           value={formData.production_capacity}
           onChange={(e) => updateFormData({ production_capacity: e.target.value })}
         />

@@ -94,8 +94,8 @@ export function OverseasStep2({ formData, updateFormData }: OverseasStep2Props) 
         <Label htmlFor="production_capacity">生产能力 / Production Capacity</Label>
         <Textarea
           id="production_capacity"
-          placeholder="Please describe your production or service capacity"
-          rows={3}
+          placeholder="Please describe your main production lines, annual capacity, equipment, technical personnel, etc."
+          rows={4}
           value={formData.production_capacity}
           onChange={(e) => updateFormData({ production_capacity: e.target.value })}
         />
