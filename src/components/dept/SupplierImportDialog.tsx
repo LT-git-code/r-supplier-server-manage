@@ -7,6 +7,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -27,6 +36,7 @@ import {
   CheckCircle2, 
   XCircle, 
   AlertCircle,
+  AlertTriangle,
   Loader2 
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -91,6 +101,7 @@ export default function SupplierImportDialog({
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [noDepartmentError, setNoDepartmentError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDownloadTemplate = () => {
@@ -253,7 +264,26 @@ export default function SupplierImportDialog({
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // 检查是否是未绑定部门的错误
+        const errorMessage = error.message || (error as any)?.context?.body?.error || '';
+        if (errorMessage.includes('未绑定部门')) {
+          setNoDepartmentError(true);
+          setStep('upload');
+          return;
+        }
+        throw error;
+      }
+
+      // 检查返回数据中是否有错误信息
+      if (data?.error) {
+        if (data.error.includes('未绑定部门')) {
+          setNoDepartmentError(true);
+          setStep('upload');
+          return;
+        }
+        throw new Error(data.error);
+      }
 
       setProgress(100);
       setResult(data);
@@ -270,8 +300,16 @@ export default function SupplierImportDialog({
 
     } catch (error) {
       console.error('Import error:', error);
-      toast.error(error instanceof Error ? error.message : '导入失败');
-      setStep('upload');
+      const errorMessage = error instanceof Error ? error.message : '导入失败';
+      
+      // 再次检查错误消息
+      if (errorMessage.includes('未绑定部门')) {
+        setNoDepartmentError(true);
+        setStep('upload');
+      } else {
+        toast.error(errorMessage);
+        setStep('upload');
+      }
     } finally {
       setImporting(false);
       if (fileInputRef.current) {
@@ -284,6 +322,7 @@ export default function SupplierImportDialog({
     setStep('upload');
     setProgress(0);
     setResult(null);
+    setNoDepartmentError(false);
     onOpenChange(false);
   };
 
@@ -307,7 +346,40 @@ export default function SupplierImportDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <>
+      {/* 未绑定部门错误弹窗 */}
+      <AlertDialog open={noDepartmentError} onOpenChange={setNoDepartmentError}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              无法导入供应商
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              <div className="space-y-3 pt-2">
+                <p className="font-medium text-foreground">该用户未绑定部门</p>
+                <p className="text-muted-foreground">
+                  您的账号尚未分配到任何部门，无法执行供应商导入操作。
+                </p>
+                <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                  <p className="font-medium mb-1">解决方法：</p>
+                  <p>请联系系统管理员将您的账号分配到相应的部门后再进行导入操作。</p>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => {
+              setNoDepartmentError(false);
+              handleClose();
+            }}>
+              我知道了
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -494,5 +566,6 @@ export default function SupplierImportDialog({
         )}
       </DialogContent>
     </Dialog>
+    </>
   );
 }
