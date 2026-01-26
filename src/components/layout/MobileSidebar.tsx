@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,7 @@ import {
   Bell,
   Search,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NavItem {
   title: string;
@@ -50,21 +52,73 @@ interface MobileSidebarProps {
 }
 
 export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
-  const { currentRole } = useAuth();
+  const { currentRole, user } = useAuth();
   const location = useLocation();
+  const [terminalLabel, setTerminalLabel] = useState<string>('');
+
+  // 获取终端标签（部门名称/公司名/管理员标识）
+  useEffect(() => {
+    const fetchTerminalLabel = async () => {
+      if (!user || !currentRole) {
+        setTerminalLabel('');
+        return;
+      }
+
+      if (currentRole === 'admin') {
+        setTerminalLabel('效率委管理端');
+        return;
+      }
+
+      if (currentRole === 'department') {
+        try {
+          const { data: userDepts } = await supabase
+            .from('user_departments')
+            .select('department_id')
+            .eq('user_id', user.id);
+
+          if (userDepts && userDepts.length > 0) {
+            const { data: dept } = await supabase
+              .from('departments')
+              .select('name')
+              .eq('id', userDepts[0].department_id)
+              .single();
+
+            setTerminalLabel(dept?.name || '部门端');
+          } else {
+            setTerminalLabel('部门端');
+          }
+        } catch (error) {
+          console.error('Error fetching department name:', error);
+          setTerminalLabel('部门端');
+        }
+        return;
+      }
+
+      if (currentRole === 'supplier') {
+        try {
+          const { data: supplier } = await supabase
+            .from('suppliers')
+            .select('company_name')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          setTerminalLabel(supplier?.company_name || '供应商端');
+        } catch (error) {
+          console.error('Error fetching supplier name:', error);
+          setTerminalLabel('供应商端');
+        }
+        return;
+      }
+
+      setTerminalLabel('');
+    };
+
+    fetchTerminalLabel();
+  }, [user, currentRole]);
 
   const filteredItems = navItems.filter(item => 
     currentRole && item.roles.includes(currentRole)
   );
-
-  const getRoleLabel = () => {
-    switch (currentRole) {
-      case 'supplier': return '供应商';
-      case 'department': return '部门';
-      case 'admin': return '管理员';
-      default: return '';
-    }
-  };
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
@@ -82,7 +136,9 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
         <div className="px-4 py-3 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-sidebar-primary" />
-            <span className="text-sm text-sidebar-muted">{getRoleLabel()}端</span>
+            <span className="text-sm text-sidebar-muted truncate" title={terminalLabel}>
+              {terminalLabel || '加载中...'}
+            </span>
           </div>
         </div>
 
