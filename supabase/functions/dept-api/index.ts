@@ -156,10 +156,10 @@ serve(async (req) => {
           );
         }
         
-        // 获取所有已批准的供应商，包含推荐和拉黑状态
+        // 获取所有已批准的供应商，包含推荐、拉黑、异议状态
         const { data: allSuppliers, error: suppliersError } = await supabaseAdmin
           .from('suppliers')
-          .select('id, company_name, supplier_type, contact_name, contact_phone, status, main_products, is_recommended, is_blacklisted')
+          .select('id, company_name, supplier_type, contact_name, contact_phone, status, main_products, is_recommended, is_blacklisted, has_objection')
           .eq('status', 'approved')
           .order('company_name');
 
@@ -181,28 +181,29 @@ serve(async (req) => {
           supplierProductsMap.set(p.supplier_id, products);
         });
 
-        // 获取本部门的启用状态和隐藏状态（使用用户的所有部门）
-        const { data: deptSuppliers } = await supabaseAdmin
+        // 获取本部门关联的供应商记录（用户所在部门）
+        const { data: myDeptSuppliers } = await supabaseAdmin
           .from('department_suppliers')
           .select('supplier_id, library_type, is_hidden, department_id')
           .in('department_id', userDeptIds);
+
+        // 本部门已关联的供应商ID集合
+        const myDeptSupplierIds = new Set(
+          myDeptSuppliers?.map(ds => ds.supplier_id) || []
+        );
 
         // 获取其他部门标记为隐藏的供应商ID
         const { data: hiddenByOthers } = await supabaseAdmin
           .from('department_suppliers')
           .select('supplier_id')
           .eq('is_hidden', true)
-          .neq('department_id', primaryDeptId);
+          .not('department_id', 'in', `(${userDeptIds.join(',')})`);
 
         const hiddenByOtherDepts = new Set(hiddenByOthers?.map(h => h.supplier_id) || []);
 
-        const enabledSupplierIds = new Set(
-          deptSuppliers?.filter(ds => ds.library_type === 'current').map(ds => ds.supplier_id) || []
-        );
-
         // 本部门隐藏的供应商ID
         const myHiddenSupplierIds = new Set(
-          deptSuppliers?.filter(ds => ds.is_hidden === true).map(ds => ds.supplier_id) || []
+          myDeptSuppliers?.filter(ds => ds.is_hidden === true).map(ds => ds.supplier_id) || []
         );
 
         // 根据Tab筛选供应商
@@ -210,24 +211,29 @@ serve(async (req) => {
         
         switch (libraryTab) {
           case 'organization':
-            // 组织库：当前部门启用的供应商
-            filteredSuppliers = filteredSuppliers.filter(s => enabledSupplierIds.has(s.id));
+            // 组织库：查询 department_suppliers 表中与当前用户部门关联的供应商
+            filteredSuppliers = filteredSuppliers.filter(s => myDeptSupplierIds.has(s.id));
             break;
           case 'premium':
-            // 优质库：标签为推荐的供应商，但排除本部门已启用的
+            // 优质库：未被启用（不在本部门关联表中）+ 标签为推荐
             filteredSuppliers = filteredSuppliers.filter(s => 
-              s.is_recommended === true && !enabledSupplierIds.has(s.id)
+              !myDeptSupplierIds.has(s.id) && s.is_recommended === true
             );
             break;
           case 'backup':
-            // 备选库：本部门未启用的非拉黑非推荐供应商
+            // 备选库：未被启用 + 非拉黑 + 非异议 + 非推荐
             filteredSuppliers = filteredSuppliers.filter(s => 
-              !enabledSupplierIds.has(s.id) && s.is_blacklisted !== true && s.is_recommended !== true
+              !myDeptSupplierIds.has(s.id) && 
+              s.is_blacklisted !== true && 
+              s.has_objection !== true && 
+              s.is_recommended !== true
             );
             break;
           case 'blacklist':
-            // 拉黑异议库：所有被拉黑的供应商（异议供应商在导入时标记）
-            filteredSuppliers = filteredSuppliers.filter(s => s.is_blacklisted === true);
+            // 拉黑异议库：所有被拉黑或有异议的供应商
+            filteredSuppliers = filteredSuppliers.filter(s => 
+              s.is_blacklisted === true || s.has_objection === true
+            );
             break;
           default:
             break;
@@ -241,10 +247,10 @@ serve(async (req) => {
           
           return {
             ...s,
-            // 如果是其他部门隐藏的，且不是在组织库中查看（组织库是自己的供应商），则隐藏联系信息
+            // 如果是其他部门隐藏的，且不是在组织库中查看，则隐藏联系信息
             contact_name: (isHiddenByOther && libraryTab !== 'organization') ? maskString(s.contact_name) : s.contact_name,
             contact_phone: (isHiddenByOther && libraryTab !== 'organization') ? maskString(s.contact_phone) : s.contact_phone,
-            library_type: enabledSupplierIds.has(s.id) ? 'current' : 'disabled',
+            library_type: myDeptSupplierIds.has(s.id) ? 'current' : 'disabled',
             is_hidden: isHiddenByMe,
             is_hidden_by_other: isHiddenByOther,
             product_names: productNames,
