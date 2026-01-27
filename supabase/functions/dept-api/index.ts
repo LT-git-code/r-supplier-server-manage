@@ -228,13 +228,12 @@ serve(async (req) => {
           case 'premium':
             // 优质库：未被任何部门启用 + 标签为推荐
             filteredSuppliers = filteredSuppliers.filter(s => 
-              !globalEnabledSupplierIds.has(s.id) && s.is_recommended === true
+              s.is_recommended === true
             );
             break;
           case 'backup':
             // 备选库：未被任何部门启用 + 非拉黑 + 非异议 + 非推荐
             filteredSuppliers = filteredSuppliers.filter(s => 
-              !globalEnabledSupplierIds.has(s.id) && 
               s.is_blacklisted !== true && 
               s.has_objection !== true && 
               s.is_recommended !== true
